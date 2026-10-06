@@ -732,9 +732,17 @@ call("POST", "/api/v1/agent/hello", {
 after = held(WIDE_TOKEN, "2026-10-01")
 across_after = max(c["column"] for c in after["cells"]) + 1
 case("a camera that reports a new angle has its cells cut again",
-     across_after > across_before and after["version"] > before["version"],
-     f"{across_before} across -> {across_after} across, version "
+     (len(after["cells"]) != len(before["cells"])
+      or all(abs(c["rotation"] - 268.0) < 1e-6 for c in after["cells"]))
+     and after["version"] > before["version"],
+     f"{len(before['cells'])} cells -> {len(after['cells'])} at 268, version "
      f"{before['version']} -> {after['version']}")
+case("...laid along the camera's own axes, cell for panel with the rig's program",
+     all(abs(c["rotation"] - 268.0) < 1e-6 for c in after["cells"])
+     and len(after["cells"]) == len(collab.camera_grid(
+         collab.Region.read(after["region"]), 206.265 * 3.76 / 389.0 * 9576 / 3600.0,
+         206.265 * 3.76 / 389.0 * 6388 / 3600.0, 268.0)),
+     f"{len(after['cells'])} cells")
 case("...and tonight's list dealt afresh on the new cells",
      after["share"] and all(0 <= i < len(after["cells"]) for i in after["share"]),
      f'{len(after["share"])} of {len(after["cells"])}')
@@ -1198,17 +1206,27 @@ case("...while what was collected is still on record",
      call("GET", f"/api/v1/projects/{ORION}")[1]["project"]["status"] == "closed")
 call("PUT", f"/api/v1/projects/{ORION}", {"status": "open"}, token=ADMIN)
 
-case("a camera that cannot turn is tiled the way it really sits",
-     across > down, f"{across} across, {down} down at 268 degrees")
-# The same camera straight was 4 across and 3 down. Turned, the long axis
-# runs north-south, so it takes more frames to cross the region and fewer to
-# climb it - the grid transposes. The total can go either way and is not the
-# point.
+# A camera that cannot turn is tiled the way its program tiles it: along
+# the camera's own axes, the long axis running north-south at 268, so the
+# grid climbs the region in more rows than the same camera straight needs.
 straight_across = max(c["column"] for c in task["cells"]) + 1
 straight_down = max(c["row"] for c in task["cells"]) + 1
-case("...the grid transposed against the same camera straight",
-     across > straight_across and down < straight_down,
+case("a camera that cannot turn is tiled the way it really sits",
+     all(abs(c["rotation"] - 268.0) < 1e-6 for c in cells) and down > straight_down,
      f"turned {across}x{down}, straight {straight_across}x{straight_down}")
+# And in the program's own order, so that cell i on the server is panel
+# i + 1 on the rig and a share of neighbouring cells is a walk between
+# neighbouring panels.
+from astrocontrol import framing as _framing                       # noqa: E402
+laid = _framing.mosaic_panels(
+    turned["task"]["region"]["ra"], turned["task"]["region"]["dec"],
+    scale * 9576 / 3600.0, scale * 6388 / 3600.0, rows=down, columns=across,
+    overlap=0.1, position_angle=268.0, align="fixed")
+case("...cell for panel, in the order the program walks them",
+     len(laid) == len(cells) and all(
+         abs(c["ra"] / 15.0 - p["ra"]) < 1e-4 and abs(c["dec"] - p["dec"]) < 1e-4
+         for c, p in zip(cells, laid)),
+     f"{len(cells)} cells, {len(laid)} panels")
 
 # --------------------------------------- dealt at the rig's own exposures
 # A share is dealt at the exposure each rig shoots that filter at - what its

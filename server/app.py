@@ -714,6 +714,10 @@ def _tile(region: collab.Region, kind: str,
     across, down = collab.footprint(field[0], field[1], profile.rotation)
     if kind == "single":
         return collab.single_cell(region, across, down)
+    if profile.rotation is not None:
+        # No rotator: the grid the rig's own program lays, cell for panel,
+        # so what is dealt here is exactly what is shot there.
+        return collab.camera_grid(region, field[0], field[1], float(profile.rotation), 0.1)
     return collab.grid(region, across, down, 0.1)
 
 

@@ -344,6 +344,41 @@ def grid(region: Region, field_width: float, field_height: float,
     return cells
 
 
+def camera_grid(region: Region, field_width: float, field_height: float,
+                rotation: float, overlap: float = 0.1) -> list[dict[str, Any]]:
+    """A fixed camera's tiling of a region: the grid its program will shoot.
+
+    A camera with no rotator shoots every panel at the angle it sits at, so
+    its program lays the mosaic *along the camera's axes*, big enough to
+    cover the north-up region measured in that frame. The server used to
+    tile the same region north-up with the turned frame's bounding box
+    instead, which gave a different grid - twelve cells against the
+    program's fifteen panels - and matching the two by nearest centre then
+    sent a share of three neighbouring cells to three panels that were not
+    neighbours, with a gap in the walk and sky the deal did not mean.
+
+    So the server lays the grid exactly as the program does, with the same
+    arithmetic, in the same order: cell `i` here is panel `i + 1` there.
+    Each cell is stored with the bounding box the turned frame really spans,
+    which is what the depth map and the "not where somebody else is" rule
+    measure overlap with.
+    """
+    from . import framing
+    across, down = camera_frame(region, rotation)
+    columns = tiles_across(across, field_width, overlap)
+    rows = tiles_across(down, field_height, overlap)
+    span_x, span_y = footprint(field_width, field_height, rotation)
+    cells = []
+    for panel in framing.mosaic_panels(region.ra, region.dec, field_width, field_height,
+                                       rows=rows, columns=columns, overlap=overlap,
+                                       position_angle=rotation, align="fixed"):
+        cells.append({"row": int(panel["row"]), "column": int(panel["column"]),
+                      **Region(ra=float(panel["ra"]) * 15.0, dec=float(panel["dec"]),
+                               width=span_x, height=span_y,
+                               rotation=float(rotation) % 360.0).payload()})
+    return cells
+
+
 def claim(cells: list[dict[str, Any]], taken: list[Region],
           fraction: float) -> list[int]:
     """Which of a rig's cells it should take: the least covered, until it holds

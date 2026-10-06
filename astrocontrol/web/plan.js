@@ -2685,12 +2685,20 @@
       return box;
     }
 
+    // Progress is how much of the *field* is at the goal, not a total of
+    // hours: ten hours on one panel of fifteen is not two thirds of a
+    // ten-hour goal, it is one fifteenth of the field done. The bar is the
+    // share of the field at full depth; the text says that, the field's
+    // average against the goal, and how thin the thinnest spot still is.
+    const progress = info.progress || {};
     const table = document.createElement('div');
     table.className = 'depth-grid';
     for (const name of names) {
       const want = Number(goals[name] || 0);
       const have = Number(got[name] || 0);
-      const share = want > 0 ? Math.min(1, have / want) : (have > 0 ? 1 : 0);
+      const prog = progress[name];
+      const share = prog ? Number(prog.atGoal || 0)
+        : (want > 0 ? Math.min(1, have / want) : (have > 0 ? 1 : 0));
 
       const label = document.createElement('span');
       label.className = 'plan-filter-name';
@@ -2700,16 +2708,33 @@
       meter.className = `meter${share >= 1 ? ' met' : ''}`;
       meter.innerHTML = '<div class="meter-fill"></div>';
       meter.querySelector('.meter-fill').style.width = `${share * 100}%`;
+      if (prog) {
+        const avg = document.createElement('div');
+        avg.className = 'meter-fill avg';
+        avg.style.width = `${Number(prog.average || 0) * 100}%`;
+        meter.appendChild(avg);
+      }
 
       const value = document.createElement('span');
       value.className = 'mono small';
-      value.textContent = want > 0
-        ? `${have.toFixed(1)} / ${want.toFixed(0)}h`
-        : `${have.toFixed(1)}h`;
+      value.textContent = prog
+        ? `${Math.round(share * 100)}% of the field at ${want.toFixed(0)}h`
+          + ` · avg ${Math.round(Number(prog.average || 0) * 100)}%`
+          + ` · thinnest ${Math.round(Number(prog.thinnest || 0) * 100)}%`
+          + ` · ${have.toFixed(1)}h shot`
+        : (want > 0 ? `${have.toFixed(1)} / ${want.toFixed(0)}h` : `${have.toFixed(1)}h`);
 
       table.append(label, meter, value);
     }
     box.appendChild(table);
+    if (Object.keys(progress).length) {
+      const note = document.createElement('p');
+      note.className = 'small muted';
+      note.textContent = 'The bar is the share of the field at the goal depth; the fainter '
+        + 'bar behind it is the field’s average. A mosaic is done when every part of '
+        + 'the sky has its goal, not when the hours add up.';
+      box.appendChild(note);
+    }
     return box;
   }
 

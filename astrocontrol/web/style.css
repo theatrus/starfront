@@ -241,8 +241,10 @@ input[type="checkbox"] { accent-color: var(--accent); }
 }
 .progress-fill { height: 100%; width: 0; background: var(--accent); transition: width 0.25s linear; }
 
-.meter { height: 4px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-bottom: 9px; }
-.meter-fill { height: 100%; width: 0; background: var(--blue); transition: width 0.4s; }
+.meter { height: 4px; background: var(--panel-2); border-radius: 3px; overflow: hidden; margin-bottom: 9px; position: relative; }
+.meter-fill { height: 100%; width: 0; background: var(--blue); transition: width 0.4s; position: relative; z-index: 1; }
+/* The field's average against the goal, faint, behind the share at goal. */
+.meter-fill.avg { position: absolute; left: 0; top: 0; z-index: 0; opacity: 0.35; }
 
 /* ---------------------------------------------------------------- equipment */
 /* ------------------------------------------------- solar system survey tab */

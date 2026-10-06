@@ -1335,6 +1335,54 @@ case("...and every rig browsing it sees them",
      wants.get("minAltitude") == 40.0 and wants.get("minMoonSeparation") == 50.0,
      str(wants))
 
+# ------------------------------------------- progress is depth everywhere
+print("\n-- progress: the goal at every point of the field --")
+
+# Ten hours on one corner of a mosaic is not two thirds of a ten-hour goal.
+# Progress is the share of the field at the goal depth, so a frame-sized
+# patch at full depth is a small fraction, and the whole region at depth
+# is one, whatever the hours add up to.
+_, deep = call("POST", "/api/v1/projects", {
+    "name": "Depth everywhere", "region": {"ra": 120.0, "dec": 20.0, "width": 12.0, "height": 6.0},
+    "requirements": {"filters": {"Ha": 3.0}}, "goals": {"Ha": 2.0}}, token=ADMIN)
+DEEP = deep["project"]["id"]
+_, deep_join = call("POST", f"/api/v1/agent/projects/{DEEP}/join", {}, token=NB[0][1])
+deep_task = deep_join["task"]
+
+
+def progress_of(project_id):
+    _, listing_ = call("GET", "/api/v1/agent/projects", token=NB[0][1])
+    return next(p for p in listing_["projects"] if p["id"] == project_id)
+
+
+empty_p = progress_of(DEEP)["progress"]
+case("with nothing shot, nothing of the field is at goal",
+     empty_p.get("H", {}).get("atGoal") == 0.0 and empty_p["H"]["average"] == 0.0, str(empty_p))
+
+# Two hours (the whole goal) on a 2 x 2 degree patch: a sixth of the area.
+call("POST", "/api/v1/agent/report", {"contributions": [{
+    "task": deep_task["id"], "night": "2026-12-20", "panel": "1", "filterName": "Ha",
+    "frames": 24, "seconds": 7200, "exposure": 300,
+    "footprint": {"ra": 120.0, "dec": 20.0, "width": 2.0, "height": 2.0},
+    "scale": 2.0, "hfr": 2.5, "guideRms": 0.7, "bandpass": 3.0}]}, token=NB[0][1])
+patch = progress_of(DEEP)
+case("the goal on one patch is that patch's share of the field, not the goal's share of the hours",
+     0.03 <= patch["progress"]["H"]["atGoal"] <= 0.08 and patch["collected"]["H"] == 2.0,
+     f'{patch["progress"]["H"]} vs {patch["collected"]["H"]}h collected')
+case("...and the thinnest part of the field is still empty",
+     patch["progress"]["H"]["thinnest"] == 0.0)
+
+# The whole region at the goal, from two half-depth passes: done.
+for night in ("2026-12-21", "2026-12-22"):
+    call("POST", "/api/v1/agent/report", {"contributions": [{
+        "task": deep_task["id"], "night": night, "panel": "0", "filterName": "Ha",
+        "frames": 12, "seconds": 3600, "exposure": 300,
+        "footprint": {"ra": 120.0, "dec": 20.0, "width": 12.0, "height": 6.0},
+        "scale": 2.0, "hfr": 2.5, "guideRms": 0.7, "bandpass": 3.0}]}, token=NB[0][1])
+whole = progress_of(DEEP)["progress"]["H"]
+case("the whole field at the goal is done, however the hours add up",
+     whole["atGoal"] == 1.0 and whole["average"] >= 0.99 and whole["thinnest"] >= 0.9, str(whole))
+
 print()
 print(f"{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

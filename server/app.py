@@ -552,6 +552,9 @@ def open_projects(agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]
             # What everyone together has collected, so somebody choosing where
             # to point can choose the one that needs them.
             "collected": _collected(project["id"]),
+            # How much of the *field* is at the goal, per filter. On a mosaic
+            # this is the number that means anything; see `_progress`.
+            "progress": _progress(project["id"], payload),
             # Who is on it, and how many of them are about tonight.
             **_participants(project["id"], time.time()),
         })
@@ -564,6 +567,64 @@ def _goals(goals: dict[str, float]) -> dict[str, float]:
     for name, hours in (goals or {}).items():
         key = filters.canonical(name) or str(name)
         out[key] = out.get(key, 0.0) + float(hours)
+    return out
+
+
+#: How finely a region is cut when progress is measured across it: the
+#: longer side in this many cells. Sixteen across a fifteen-degree mosaic
+#: is a cell under a degree, a quarter of a panel - fine enough that a
+#: panel's worth of frames counts where it landed and not where it did not.
+PROGRESS_CELLS = 16
+
+#: The fraction of the goal a cell must hold to count as at it.
+AT_GOAL = 0.9
+
+
+def _progress(project_id: str, payload: dict[str, Any]) -> dict[str, dict[str, float]]:
+    """Per filter, how much of the region is at the goal depth, across everybody.
+
+    A total of hours says nothing about a mosaic: ten hours on one panel and
+    none on the other fourteen is ten hours. What the coordinator set out was
+    a depth at *every point* of the region, so that is what is measured.
+    The region is cut into a fine grid; every accepted frame's footprint
+    credits the cells it covers with its seconds, in proportion to how much
+    of each it covers; and each filter then reports the fraction of the
+    field at full depth, the field's average against the goal, and its
+    thinnest cell. A project is done when the first of those is one.
+    """
+    goals = _goals(payload.get("goals") or {})
+    try:
+        region = collab.Region.read(payload.get("region") or {})
+    except (KeyError, TypeError, ValueError):
+        return {}
+    if not goals or region.width <= 0 or region.height <= 0:
+        return {}
+    if payload.get("kind") == "single":
+        cells = [{"row": 0, "column": 0, **region.payload()}]
+    else:
+        cell = max(abs(region.width), abs(region.height)) / PROGRESS_CELLS
+        cells = collab.grid(region, cell, cell, 0.0)
+    shot = [row["payload"] for row in store.contributions(project_id)
+            if row.get("accepted") and (row.get("payload") or {}).get("footprint")]
+    depth, _ = collab.coverage(cells, shot)
+    count = max(1, len(cells))
+    out: dict[str, dict[str, float]] = {}
+    for name, hours in goals.items():
+        goal = float(hours) * 3600.0
+        if goal <= 0:
+            continue
+        key = collab._key(name)
+        fractions = [min(1.0, depth.get(i, {}).get(key, 0.0) / goal) for i in range(count)]
+        out[name] = {
+            "goalHours": round(float(hours), 2),
+            # Within a tenth of the goal counts as there: the outermost sliver
+            # of a frame is its overlap with the next, and the flat-sky
+            # arithmetic the overlap is measured with is itself a few percent
+            # out at the corners of a tall region.
+            "atGoal": round(sum(1 for f in fractions if f >= AT_GOAL) / count, 3),
+            "average": round(sum(fractions) / count, 3),
+            "thinnest": round(min(fractions), 3),
+        }
     return out
 
 

@@ -500,19 +500,30 @@
       // Depth per filter, across everybody. The question a participant has is
       // "is this nearly done, and does it still need me?", and nothing about
       // their own frames answers it.
+      // The bar is how much of the *field* is at the goal depth, when the
+      // server says: on a mosaic a total of hours means nothing, since ten
+      // hours on one panel of fifteen is one fifteenth of the field done.
       const goals = project.goals || {};
       const got = project.collected || {};
+      const progress = project.progress || {};
       const names = [...new Set([...Object.keys(goals),
         ...Object.keys(got)])].sort();
       const depth = names.map((name) => {
         const want = Number(goals[name] || 0);
         const have = Number(got[name] || 0);
-        const share = want > 0 ? Math.min(100, have / want * 100) : (have ? 100 : 0);
+        const prog = progress[name];
+        const share = prog ? Number(prog.atGoal || 0) * 100
+          : (want > 0 ? Math.min(100, have / want * 100) : (have ? 100 : 0));
+        const avg = prog ? `<div class="meter-fill avg" style="width:${
+          (Number(prog.average || 0) * 100).toFixed(0)}%"></div>` : '';
+        const text = prog
+          ? `${share.toFixed(0)}% of field at ${want.toFixed(0)}h · avg ${
+            (Number(prog.average || 0) * 100).toFixed(0)}%`
+          : `${have.toFixed(1)}${want ? ` / ${want.toFixed(0)}` : ''}h`;
         return `<span class="plan-filter-name">${esc(name)}</span>
           <div class="meter${share >= 100 ? ' met' : ''}"><div class="meter-fill"
-               style="width:${share.toFixed(0)}%"></div></div>
-          <span class="mono small">${have.toFixed(1)}${
-            want ? ` / ${want.toFixed(0)}` : ''}h</span>`;
+               style="width:${share.toFixed(0)}%"></div>${avg}</div>
+          <span class="mono small">${esc(text)}</span>`;
       }).join('');
 
       // With a rotator, joining is also a choice about the camera's angle:

@@ -4310,6 +4310,9 @@ def _collab_entry(target: dict[str, Any]) -> dict[str, Any] | None:
         "visit": (task or {}).get("visit") or {},
         "goals": (project or {}).get("goals") or {},
         "collected": (project or {}).get("collected") or {},
+        # How much of the field is at the goal, per filter - what "done"
+        # means on a mosaic, where a total of hours does not.
+        "progress": (project or {}).get("progress") or {},
         "notes": (project or {}).get("notes") or "",
         # Whether the numbers above could be refreshed at all. A stale depth
         # bar that says nothing about being stale is worse than none.

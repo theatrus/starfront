@@ -1228,6 +1228,37 @@ case("...cell for panel, in the order the program walks them",
          for c, p in zip(cells, laid)),
      f"{len(cells)} cells, {len(laid)} panels")
 
+# A task tiled by the old rule - north-up cells of the turned frame's
+# bounding box - is cut again on the rig's next poll, without the camera
+# having moved, so a project started before the change is not stuck with
+# a grid that no longer matches the rig's panels.
+from server import app as _server_app                                # noqa: E402
+stale_task = dict(_server_app.store.task(turned["task"]["id"]))
+old_cells = collab.grid(collab.Region.read(stale_task["region"]),
+                        *collab.footprint(scale * 9576 / 3600.0, scale * 6388 / 3600.0, 268.0), 0.1)
+stale_task["cells"] = old_cells
+stale_task["share"] = [0, 1, 2]
+_server_app.store.set_task(stale_task)
+_, polled = call("GET", "/api/v1/agent/task?night=2026-12-10", token=fixed_made["token"])
+recut = next(t for t in polled["tasks"] if t["id"] == turned["task"]["id"])
+
+
+def same_centres(a, b):
+    return len(a) == len(b) and all(
+        abs(x["ra"] - y["ra"]) < 0.01 and abs(x["dec"] - y["dec"]) < 0.01 for x, y in zip(a, b))
+
+
+# On this region both rules happen to make ten cells, so it is the centres
+# that tell them apart: the old grid's are gone and the program's are back.
+case("cells cut by the old rule are cut again on the next poll, camera unmoved",
+     same_centres(recut["cells"], cells) and not same_centres(recut["cells"], old_cells)
+     and all(0 <= i < len(recut["cells"]) for i in recut["share"]),
+     f"{len(old_cells)} old cells -> {len(recut['cells'])}, share {recut['share']}")
+_, polled_again = call("GET", "/api/v1/agent/task?night=2026-12-10", token=fixed_made["token"])
+same_again = next(t for t in polled_again["tasks"] if t["id"] == turned["task"]["id"])
+case("...and once they match, nothing is cut again",
+     same_again["version"] == recut["version"] and same_again["cells"] == recut["cells"])
+
 # --------------------------------------- dealt at the rig's own exposures
 # A share is dealt at the exposure each rig shoots that filter at - what its
 # darks are built for - so every light it takes can be calibrated. A default

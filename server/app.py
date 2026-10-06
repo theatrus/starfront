@@ -726,6 +726,24 @@ def _tile(region: collab.Region, kind: str,
 RETILE_DEGREES = 2.0
 
 
+def _same_cells(stored: list[dict[str, Any]], fresh: list[dict[str, Any]]) -> bool:
+    """Whether a task's cells are the ones the tiling would cut now.
+
+    Count and centres, to a hundredth of a degree; the sizes follow from
+    the same camera and need no checking of their own.
+    """
+    if len(stored) != len(fresh):
+        return False
+    for a, b in zip(stored, fresh):
+        try:
+            if (abs(((float(a["ra"]) - float(b["ra"]) + 180.0) % 360.0) - 180.0) > 0.01
+                    or abs(float(a["dec"]) - float(b["dec"])) > 0.01):
+                return False
+        except (KeyError, TypeError, ValueError):
+            return False
+    return True
+
+
 def _retile_if_turned(task: dict[str, Any], profile: collab.RigProfile,
                       project: dict[str, Any]) -> bool:
     """Cut a task's cells again when the camera no longer sits where they
@@ -740,23 +758,27 @@ def _retile_if_turned(task: dict[str, Any], profile: collab.RigProfile,
     """
     was = task.get("tiledRotation", "unset")
     now = profile.rotation
+    payload = project.get("payload") or {}
     if was == "unset":
         task["tiledRotation"] = now
         store.set_task(task)
-        return False
-    if was is None and now is None:
         return False
     # Half a turn is the same rectangle on the sky, so the cells are the
     # same cells: only the remainder past a half-turn counts as having moved.
     turned = ((was is None) != (now is None)
               or (was is not None and now is not None
                   and abs(((float(was) - float(now) + 90.0) % 180.0) - 90.0) > RETILE_DEGREES))
-    if not turned:
-        return False
-    payload = project.get("payload") or {}
     cells = _tile(collab.Region.read(payload["region"]),
                   task.get("kind") or "mosaic", profile)
     if not cells:
+        return False
+    # Cells cut by an older rule are cut again too: the tiling of a fixed
+    # camera changed to match the rig's own panels, and a task tiled the old
+    # way would otherwise keep its twelve cells against the rig's fifteen
+    # for as long as the project ran.
+    if not turned and not _same_cells(task.get("cells") or [], cells):
+        turned = True
+    if not turned:
         return False
     task.update({"cells": cells, "share": [], "visit": {},
                  "tiledRotation": now, "assignedNight": "", "assignedAt": 0.0,

@@ -437,9 +437,12 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "flipSolve": True,                  # re-centre by plate solve after it
         "settleSeconds": 10.0,              # after every slew
         # What to do with the mount when the plan runs out. Parking is the safe
-        # answer for an observatory that closes a roof behind it; a rig under a
-        # cover is usually better left tracking where the operator left it.
-        "parkAtEnd": False,
+        # answer for a rig nobody is standing next to, which is nearly every
+        # rig this runs: two telescopes on their first collaboration night
+        # finished at dawn and sat tracking into the day because this was
+        # off and nobody knew it was a setting. A rig under a cover whose
+        # operator would rather it stayed put turns it off.
+        "parkAtEnd": True,
         "stopTrackingAtEnd": False,
         # Send the mount to its home switches before the first slew of the
         # night. A mount that has been power-cycled, nudged, or left parked by

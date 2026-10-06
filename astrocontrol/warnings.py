@@ -487,6 +487,29 @@ def camera_darks_match(board: WarningBoard, ctx: Context) -> None:
 
 
 @check
+def mount_left_tracking(board: WarningBoard, ctx: Context) -> None:
+    """A run that will leave the mount tracking into the day.
+
+    Parking at the end is a setting, and two telescopes finished their
+    first collaboration night with it off and sat tracking into the
+    morning. Said once, as a notice, while the run is on - not a fault,
+    but the kind of choice worth seeing before dawn rather than after.
+    """
+    run = ctx.run()
+    if not run.get("running") or run.get("loop"):
+        return
+    if ctx.setting("sequencer", "parkAtEnd", True) or ctx.setting("sequencer", "stopTrackingAtEnd", False):
+        return
+    mount = ctx.device("mount")
+    if mount is None or not getattr(mount, "connected", False):
+        return
+    board.raise_("mount.unparked", "notice", "The mount will be left tracking when the run ends",
+                 "Park at end is off under Equipment → Sequencer, so the mount stays where "
+                 "the last target set when the night is over.",
+                 "Turn on Park at end, or use Run on loop, which always parks.")
+
+
+@check
 def frames_not_saved(board: WarningBoard, ctx: Context) -> None:
     run = ctx.run()
     if not run.get("running") or ctx.rigs is None:

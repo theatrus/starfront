@@ -252,6 +252,20 @@ trip("...a spelling the wheel knows is fine",
               "filterwheel": types.SimpleNamespace(connected=True, names=["Lum", "R"])},
      absent="plan.filters")
 
+# The mount left tracking at the end.
+trip("a run with park-at-end off says the mount will be left tracking",
+     devices={"camera": camera(), "mount": mount()},
+     run={"running": True, "state": "imaging"}, expect="mount.unparked",
+     sequencer={"parkAtEnd": False, "stopTrackingAtEnd": False})
+trip("...not when it will park", devices={"camera": camera(), "mount": mount()},
+     run={"running": True, "state": "imaging"}, absent="mount.unparked",
+     sequencer={"parkAtEnd": True})
+trip("...nor on a looped run, which always parks", devices={"camera": camera(), "mount": mount()},
+     run={"running": True, "state": "imaging", "loop": True}, absent="mount.unparked",
+     sequencer={"parkAtEnd": False})
+trip("...nor when nothing is running", devices={"camera": camera(), "mount": mount()},
+     absent="mount.unparked", sequencer={"parkAtEnd": False})
+
 # Frames not saved, camera hung.
 b, found, r, dog = trip("exposing with saving off is critical",
                         devices={"camera": camera(), "mount": mount()},

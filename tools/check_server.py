@@ -749,9 +749,10 @@ case("...and tonight's list dealt afresh on the new cells",
 again = held(WIDE_TOKEN, "2026-10-01")
 case("...and holds from then on", again["version"] == after["version"])
 # The hours a rig gives come off its plan and can shrink - a window pinned
-# shorter, a target that sets early. A list dealt for six hours is wrong for
-# a rig that now has two, so the list is dealt again, smaller, and held from
-# then on. A panel is either reachable tonight or it is not.
+# shorter, a target that sets early. The list dealt for tonight holds all
+# the same: a sequence drawn up at dusk is the sequence that runs, and the
+# panels the shorter night does not reach are simply not shot. The smaller
+# hours are dealt for the next night.
 before = held(WIDE_TOKEN, "2026-10-01")
 call("POST", "/api/v1/agent/hello", {
     "protocol": collab.PROTOCOL,
@@ -762,12 +763,16 @@ call("POST", "/api/v1/agent/hello", {
                 "field": [206.265 * 3.76 / 389.0 * 9576 / 3600.0,
                           206.265 * 3.76 / 389.0 * 6388 / 3600.0]}},
     token=WIDE_TOKEN)
-shorter = held(WIDE_TOKEN, "2026-10-01")
-case("a rig whose night shrank is dealt a shorter list for it",
+same_night = held(WIDE_TOKEN, "2026-10-01")
+case("a rig whose night shrank keeps tonight's list exactly as dealt",
+     same_night["share"] == before["share"] and same_night["version"] == before["version"],
+     f'{len(before["share"])} panels, version {before["version"]} -> {same_night["version"]}')
+shorter = held(WIDE_TOKEN, "2026-10-01b")
+case("...and the next night is dealt for the two hours it now gives",
      0 < len(shorter["share"]) < len(before["share"])
      and shorter["version"] > before["version"],
      f'{len(before["share"])} -> {len(shorter["share"])} panels for 2 h')
-case("...that fits the two hours",
+case("...fitting the two hours",
      len(shorter["share"]) * (shorter["visit"]["seconds"] + 90) <= 2 * 3600 + 1,
      f'{len(shorter["share"])} x {shorter["visit"]["seconds"]:.0f}s')
 
@@ -1065,8 +1070,8 @@ leftover = held_on(NB[2][1], "2026-11-28", MOONY, "&moon=0.95&moonUp=0.9")
 case("...and when the narrowband is finished, a bright night still shoots what is left",
      leftover["visit"].get("filter") == "O", str(leftover["visit"]))
 
-# A list dealt the old way - every filter on every panel - is not held for
-# the night: the first poll after the change deals it again, one filter.
+# Nothing moves a list under its night - not even a list that looks wrong.
+# Whatever the server would deal differently now, it deals the next night.
 from server import app as server_app                                 # noqa: E402
 old_style = held_on(NB[0][1], "2026-12-01", BAND)
 stale = dict(old_style)
@@ -1074,15 +1079,20 @@ stale["visit"] = {"seconds": 18000.0,
                   "frames": {f["filter"]: 10 for f in old_style["filters"]}}
 server_app.store.set_task(stale)
 again = held_on(NB[0][1], "2026-12-01", BAND)
-case("a night dealt the old way, every filter on every panel, is dealt again as one filter",
-     len(again["visit"]["frames"]) == 1 and again["version"] > old_style["version"],
-     f'{again["visit"]["frames"]} v{again["version"]} (was v{old_style["version"]})')
+case("a list dealt for tonight holds for tonight, whatever it looks like",
+     again["version"] == stale["version"] and len(again["visit"]["frames"]) > 1,
+     f'v{again["version"]}, {again["visit"]["frames"]}')
+tomorrow = held_on(NB[0][1], "2026-12-02", BAND)
+case("...and is dealt properly, one filter, when the night turns",
+     len(tomorrow["visit"]["frames"]) == 1 and tomorrow["version"] > again["version"],
+     f'{tomorrow["visit"]["frames"]} v{tomorrow["version"]}')
 status, health = call("GET", "/api/v1/health")
 case("the health line says which build is running",
      bool(health.get("version")), str(health.get("version")))
 
-# A list made before the rig said anything about its Moon is made again,
-# once, when it does: dealt blind it went to OIII, and the night is bright.
+# A list made before the rig said anything about its Moon holds for its
+# night like any other; the Moon is counted the next night. (The join now
+# carries the Moon, so a blind deal only happens on an old program.)
 _, blind_project = call("POST", "/api/v1/projects", {
     "name": "Blind deal", "region": {"ra": 60.0, "dec": 30.0, "width": 10.0, "height": 6.0},
     # OIII first in the project's order, so a deal that knows nothing of the
@@ -1095,11 +1105,12 @@ blind = held_on(NB[1][1], "2026-12-05", BLIND)
 case("dealt with no word of the Moon, the night goes to what moonlight would spoil",
      blind["visit"].get("filter") == "O" and "moon" not in blind["visit"], str(blind["visit"]))
 told = held_on(NB[1][1], "2026-12-05", BLIND, "&moon=0.9&moonUp=0.9")
-case("...and is dealt again, once, when the rig reports a bright Moon",
-     told["visit"].get("filter") == "H" and told["version"] > blind["version"], str(told["visit"]))
-again_told = held_on(NB[1][1], "2026-12-05", BLIND, "&moon=0.9&moonUp=0.9")
-case("...after which the list holds for the night",
-     again_told["version"] == told["version"] and again_told["share"] == told["share"])
+case("...and holds for the night even when the Moon is reported later",
+     told["visit"].get("filter") == "O" and told["version"] == blind["version"], str(told["visit"]))
+next_night = held_on(NB[1][1], "2026-12-06", BLIND, "&moon=0.9&moonUp=0.9")
+case("...the next night is dealt with the Moon in mind",
+     next_night["visit"].get("filter") == "H" and next_night["version"] > blind["version"],
+     str(next_night["visit"]))
 
 # Joining twice is one share. The second press hands back the task the rig
 # already holds, and a rig that somehow holds two is left with the newest.

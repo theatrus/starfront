@@ -1623,12 +1623,16 @@ single-target project still splits each visit across its filters in
 proportion to how deep it wants each, since there is only the one spot of sky
 and every telescope is on it.
 
-The list **holds for the night**.  The program tells the server which night it
-is in on every poll, and the list is remade the first time it asks in a new
-one — so everything moves on by default each night, and nothing moves under a
-rig at 2 a.m. because somebody else's frames arrived.  Somebody joining at nine
-is dealt around the panels you have been shooting since eight.  A rig that
-gives six hours a night is sent to twice the panels of one giving three.
+The list **holds for the night, without exception**.  The program tells the
+server which night it is in on every poll, and the list is remade the first
+time it asks in a new one — so everything moves on by default each night, and
+nothing moves under a rig at 2 a.m.: not another rig joining, not frames
+arriving, not a window that shrank, not a better idea about the filters.
+Every one of those is reconsidered when the night turns.  A sequence drawn up
+at dusk — here, or in another program that reads the deal once — is the
+sequence that runs.  Somebody joining at nine is dealt around the panels you
+have been shooting since eight.  A rig that gives six hours a night is sent to
+twice the panels of one giving three.
 
 `python tools/check_server.py` runs three telescopes across four nights of
 this and checks that nobody is sent to the same sky the same night, that each

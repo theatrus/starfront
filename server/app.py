@@ -514,7 +514,7 @@ def current_task(agent: dict[str, Any] = Depends(agent_from),
     for task in tasks:
         project = store.project(task["project"])
         if project is not None and task.get("cells"):
-            _retile_if_turned(task, profile, project)
+            _retile_if_turned(task, profile, project, night.strip())
     # Shares move as others join and as frames come in, and a poll is when a
     # rig finds out. Cheap when nothing has changed: a share that is the same
     # is not rewritten, so the version stays put and the rig has nothing to do.
@@ -901,7 +901,7 @@ def _same_cells(stored: list[dict[str, Any]], fresh: list[dict[str, Any]]) -> bo
 
 
 def _retile_if_turned(task: dict[str, Any], profile: collab.RigProfile,
-                      project: dict[str, Any]) -> bool:
+                      project: dict[str, Any], night: str = "") -> bool:
     """Cut a task's cells again when the camera no longer sits where they
     were cut for.
 
@@ -931,8 +931,10 @@ def _retile_if_turned(task: dict[str, Any], profile: collab.RigProfile,
     # Cells cut by an older rule are cut again too: the tiling of a fixed
     # camera changed to match the rig's own panels, and a task tiled the old
     # way would otherwise keep its twelve cells against the rig's fifteen
-    # for as long as the project ran.
-    if not turned and not _same_cells(task.get("cells") or [], cells):
+    # for as long as the project ran. But not under a list dealt for the
+    # night in hand - that waits for the night to turn, like everything else.
+    held_tonight = bool(task.get("share")) and night and task.get("assignedNight") == night
+    if not turned and not held_tonight and not _same_cells(task.get("cells") or [], cells):
         turned = True
     if not turned:
         return False
@@ -966,14 +968,15 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None,
     every panel anybody has reported — and from where *this* rig has been.
     See `collab.assign` for the order the pulls are resolved in.
 
-    A list, once made, holds for the night it was made for. `nights` says
-    which night the asking rig is in; its list is remade the first time it
-    asks in a new one, so everything moves on by default each night and nothing
-    moves under a rig that is shooting. Everybody else's list is left as it is
-    (or remade if it is twenty hours old and its rig never said which night it
-    was in) and counts as spoken for tonight. A rig whose list changed has its
-    task's version bumped, which is the signal its program watches for; one
-    whose list held is left exactly alone, so an idle poll costs nothing.
+    A list, once made, holds for the night it was made for - without
+    exception. `nights` says which night the asking rig is in; its list is
+    remade the first time it asks in a new one, so everything moves on by
+    default each night and nothing moves under a rig that is shooting.
+    Everybody else's list is left as it is (or remade if it is twenty hours
+    old and its rig never said which night it was in) and counts as spoken
+    for tonight. A rig whose list changed has its task's version bumped,
+    which is the signal its program watches for; one whose list held is
+    left exactly alone, so an idle poll costs nothing.
     """
     project = store.project(project_id)
     if project is None:
@@ -1032,28 +1035,14 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None,
             current = bool(held) and made_for == dealing
         else:
             current = bool(held) and now - made_at < ASSIGNMENT_HOLD_SECONDS
-        # The hours a rig gives tonight come from its own plan - the window
-        # its target really has - and a list dealt for six hours is wrong for
-        # a rig that now reports two. A panel is either reachable tonight or
-        # it is not; a list that was, is dealt again when the hours move.
-        if current and asked is not None:
-            dealt_for = float(task.get("dealtHours") or 0.0)
-            if dealt_for and abs(hours - dealt_for) > 0.15 * max(hours, dealt_for):
-                current = False
-        # A list dealt the old way - every filter on every panel, which on a
-        # five-filter project is a night on one panel - is dealt again now
-        # rather than held. Once, when the rig first asks after the change.
-        if (current and asked is not None and (task.get("kind") or "mosaic") == "mosaic"
-                and len(task.get("filters") or []) > 1
-                and len(((task.get("visit") or {}).get("frames") or {})) > 1):
-            current = False
-        # A list dealt before the rig said anything about its Moon is dealt
-        # again the first time it does: a filter chosen blind to a bright
-        # Moon is the wrong filter for the night. Once per list.
-        if (current and asked is not None and moon is not None
-                and len(task.get("filters") or []) > 1
-                and "moon" not in (task.get("visit") or {})):
-            current = False
+        # And that is the whole rule. A list dealt for a night holds for
+        # that night, whatever arrives: a rig's hours shrinking, another rig
+        # joining, frames landing, a better idea about the filters. Every
+        # one of those is reconsidered when the night turns and the list is
+        # dealt afresh, and not before. A sequence drawn up at dusk - here,
+        # or in another program that only reads the deal once - must be the
+        # sequence that runs; a server that redrew it at two in the morning
+        # cost a slew and a refocus every time it did, and nothing was wrong.
         if current:
             tonight.extend(collab.Region.read(cells[i]) for i in held
                            if 0 <= i < len(cells))

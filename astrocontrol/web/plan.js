@@ -1629,31 +1629,10 @@
       ctx.lineWidth = 1;
       ctx.strokeRect(g.w / 2 - rw / 2, g.h / 2 - rh / 2, rw, rh);
       ctx.setLineDash([]);
-      // Tonight's panels on this telescope, in green, and only those: the
-      // rest of the mosaic's tiles are the framing's business, and over a
-      // depth map they were clutter.
-      if (field.width > 0) {
-        for (const panel of panels) {
-          if (!share.has(panel.index)) continue;
-          const centre = g.toCanvas(panel.ra, panel.dec);
-          if (!centre) continue;
-          // The same correction the framing makes: north turns across the
-          // picture, and a camera at a fixed sky angle turns with it.
-          const angle = ((panel.rotation || 0) + northAngle(g.ra0, g.dec0, panel.ra, panel.dec)) * DEG;
-          ctx.save();
-          ctx.translate(centre[0], centre[1]);
-          ctx.rotate(-angle);
-          ctx.strokeStyle = 'rgba(126, 231, 165, 0.95)';
-          ctx.lineWidth = 1.6;
-          ctx.strokeRect(-field.width * g.scale / 2, -field.height * g.scale / 2,
-            field.width * g.scale, field.height * g.scale);
-          ctx.restore();
-          ctx.fillStyle = 'rgba(126, 231, 165, 0.95)';
-          ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.fillText(String(panel.index), centre[0], centre[1] + 3.5);
-        }
-      }
+      // No panels over it. The depth map is about what the collaboration
+      // has collected, not where this telescope goes next; the framing on
+      // the closed box already shows that, and drawn here the frames hid
+      // the very cells the map exists to show.
       // Scale bar: the goal in hours, as the colour it is drawn in.
       ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
       ctx.font = '10px "Segoe UI", system-ui, sans-serif';

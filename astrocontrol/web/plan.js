@@ -650,6 +650,123 @@
     return line;
   }
 
+  /** Tonight, panel by panel, for this telescope.
+   *
+   *  The Tonight line says what comes home; this says what the telescope
+   *  does, in the order it does it: which panel, when it starts, how many
+   *  frames in which filter, how long it stays. It is the answer to "is it
+   *  going to shoot three panels or three filters?" without having to put
+   *  the two numbers together, and it names what tonight does *not* reach,
+   *  so a share dealt bigger than the window is not a surprise in the morning.
+   *
+   *  Built from the same forecast as the Tonight line, so the two agree.
+   */
+  function buildItinerary(entry, data) {
+    const perRig = entry.tonight || {};
+    const master = data.masterRig;
+    const plan = perRig[master] || perRig[Object.keys(perRig)[0]];
+    if (!plan || plan.nothing || !plan.panels || !plan.panels.length) return null;
+    const overheads = data.overheads || {};
+    const rows = (entry.filters || []).filter((row) => row.count > 0);
+    if (!rows.length) return null;
+    const info = entry.collab || {};
+    const rigName = ((data.telescopes || []).find((r) => r.id === master) || {}).name
+      || 'this telescope';
+    const esc = (text) => String(text === null || text === undefined ? '' : text)
+      .replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    const box = document.createElement('div');
+    box.className = 'plan-itinerary small';
+
+    // -- the headline: panels, filters, frames, time ----------------------
+    const filterNames = rows.map((row) => row.name);
+    const totalFrames = Object.values(plan.frames).reduce((a, b) => a + b, 0);
+    const head = document.createElement('div');
+    head.className = 'plan-itinerary-head';
+    head.innerHTML = `<b>Tonight for ${esc(rigName)}</b> `
+      + `<span class="mono">${plan.panels.length} panel${plan.panels.length === 1 ? '' : 's'}`
+      + ` · ${filterNames.length} filter${filterNames.length === 1 ? '' : 's'}`
+      + ` (${esc(filterNames.join(', '))}) · ${totalFrames} frames · ${duration(plan.seconds)}</span>`;
+    box.appendChild(head);
+
+    // -- one line per panel, in capture order -----------------------------
+    // The clock starts where the run does: the pinned start, else when the
+    // target clears the horizon, else now if that is already behind us.
+    const now = Date.now() / 1000;
+    let at = entry.startAt || (entry.window && entry.window.rises) || now;
+    if (at < now && !(app.state.status && app.state.status.sequence
+        && app.state.status.sequence.running)) at = now;
+    const perPanel = planSeconds(rows, 1, overheads) - focusSeconds(planSeconds(rows, 1, overheads), rows.length, overheads);
+    const framesText = (counts) => rows
+      .filter((row) => (counts[row.name] || 0) > 0)
+      .map((row) => `${counts[row.name]} × ${Number(row.exposure).toFixed(0)}s ${row.name}`)
+      .join(' + ');
+    const full = {};
+    rows.forEach((row) => { full[row.name] = row.count; });
+
+    const list = document.createElement('div');
+    list.className = 'plan-itinerary-list mono';
+    plan.panels.forEach((index, position) => {
+      const line = document.createElement('div');
+      line.className = 'plan-itinerary-row';
+      const partial = plan.partial && plan.partial.panel === index && position === plan.panels.length - 1;
+      let counts = full;
+      let stay = perPanel;
+      if (partial) {
+        // The short last panel: the forecast only knows the total frame
+        // count, so they are shown in the order the filters are walked.
+        counts = {};
+        let left = plan.partial.frames;
+        for (const row of rows) {
+          const take = Math.min(left, row.count);
+          if (take > 0) counts[row.name] = take;
+          left -= take;
+        }
+        stay = plan.partial.seconds || stay;
+      }
+      line.innerHTML = `<span class="muted">${clock(at)}</span>`
+        + `<span class="plan-itinerary-panel">panel ${index}</span>`
+        + `<span>${esc(framesText(counts))}</span>`
+        + `<span class="muted">${duration(stay)}${partial ? ' · cut short by the window' : ''}</span>`;
+      if (partial) line.classList.add('partial');
+      list.appendChild(line);
+      at += stay;
+    });
+    box.appendChild(list);
+
+    // -- what tonight does not reach --------------------------------------
+    const notes = [];
+    const share = info.share && info.share.length ? info.share : null;
+    const reached = new Set(plan.panels);
+    if (share) {
+      const left = share.filter((index) => !reached.has(index));
+      if (left.length) {
+        notes.push(`The server dealt ${share.length} panels; the window reaches `
+          + `${plan.panels.length}. Panel${left.length === 1 ? '' : 's'} `
+          + `${left.sort((a, b) => a - b).join(', ')} ${left.length === 1 ? 'goes' : 'go'} `
+          + 'back on the next check-in for another telescope or another night.');
+      }
+      const others = (info.totalPanels || entry.panels || 0) - share.length;
+      if (others > 0) {
+        notes.push(`The other ${others} panels of the mosaic are other telescopes’ or other nights’.`);
+      }
+    } else if (!plan.fits && plan.totalPanels > 1) {
+      const left = plan.totalPanels - plan.panels.length;
+      notes.push(`${left} panel${left === 1 ? '' : 's'} will not be started tonight; `
+        + 'the capture order picks up where the sky leaves it.');
+    }
+    if (filterNames.length === 1 && info.visit && info.visit.filter) {
+      notes.push(`One filter all night, by the server’s choice: every panel gets its ${filterNames[0]} stack.`);
+    }
+    if (notes.length) {
+      const foot = document.createElement('div');
+      foot.className = 'muted plan-itinerary-notes';
+      foot.textContent = notes.join(' ');
+      box.appendChild(foot);
+    }
+    return box;
+  }
+
   /* ------------------------------------------------------- budget maths */
 
   /* Mirrors schedule.plan_seconds / schedule.max_count so the inputs can show a
@@ -1102,21 +1219,36 @@
         + (mosaic ? `   ·   ${duration(entry.perPanelSeconds)} per panel` : '');
     box.appendChild(window_line);
 
+    // A mosaic gets its night as an itinerary - which panel, when, how many
+    // frames in which filter - because "29× H · panels 3, 10, 15" asks the
+    // reader to work out for themselves whether that is three panels or three
+    // filters. The order line below it is this telescope's own walk, not the
+    // whole grid's: on a collaboration most of the grid is somebody else's.
+    const itinerary = mosaic ? buildItinerary(entry, data) : null;
+    if (itinerary) box.appendChild(itinerary);
+    else {
+      const forecast = buildTonight(entry, data);
+      if (forecast) box.appendChild(forecast);
+    }
+
     if (mosaic && entry.tileOrder && entry.tileOrder.order.length) {
+      const pickedSet = new Set(((entry.options || {}).panels || []).map(Number));
+      const walk = pickedSet.size
+        ? entry.tileOrder.order.filter((index) => pickedSet.has(Number(index)))
+        : entry.tileOrder.order;
       const order = document.createElement('div');
       order.className = 'plan-order small';
-      order.innerHTML = '<span class="muted">Capture order</span> '
-        + `<b class="mono">${entry.tileOrder.order.join(' → ')}</b>`
-        + (entry.tileOrder.adjacent
-          ? ' <span class="muted">· neighbours only, no gradient seam</span>'
-          : ' <span class="warn">· not all steps are adjacent</span>')
+      order.innerHTML = `<span class="muted">${pickedSet.size ? 'Your panels, in capture order' : 'Capture order'}</span> `
+        + `<b class="mono">${walk.join(' → ')}</b>`
+        + (pickedSet.size
+          ? ` <span class="muted">· ${entry.tileOrder.order.length} in the whole mosaic</span>`
+          : (entry.tileOrder.adjacent
+            ? ' <span class="muted">· neighbours only, no gradient seam</span>'
+            : ' <span class="warn">· not all steps are adjacent</span>'))
         + (entry.tileOrder.note
           ? ` <span class="warn">· ${entry.tileOrder.note}</span>` : '');
       box.appendChild(order);
     }
-
-    const forecast = buildTonight(entry, data);
-    if (forecast) box.appendChild(forecast);
 
     // A collaboration chunk shows its framing without being opened. It is a
     // piece of somebody else's sky that this telescope did not choose, and the

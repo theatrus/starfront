@@ -533,6 +533,10 @@ class CollabClient:
                       "success")
         return answer
 
+    def depth(self, project_id: str) -> dict[str, Any]:
+        """Everybody's exposure on every cell of a project's region, per filter."""
+        return self._call("GET", f"/api/v1/agent/projects/{project_id}/depth")
+
     def tasks(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(self._tasks)

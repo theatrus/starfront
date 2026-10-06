@@ -538,6 +538,22 @@ def current_task(agent: dict[str, Any] = Depends(agent_from),
     }
 
 
+@app.get("/api/v1/agent/projects/{project_id}/depth")
+def project_depth(project_id: str,
+                  agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
+    """The depth map of a project: everybody's seconds on every cell of the
+    region, per filter, for the picture of the field on the Plan tab."""
+    store.seen(agent["id"])
+    project = store.project(project_id)
+    if project is None:
+        raise HTTPException(status_code=404, detail="no such project")
+    grid = _depth_grid(project_id, project.get("payload") or {})
+    if grid is None:
+        raise HTTPException(status_code=409, detail="this project has no region to map")
+    return {"project": project_id, "name": project["name"], **grid,
+            "progress": _progress(project_id, project.get("payload") or {})}
+
+
 @app.get("/api/v1/agent/projects")
 def open_projects(agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Every project that is open, and whether this telescope can help.
@@ -603,6 +619,43 @@ PROGRESS_CELLS = 16
 AT_GOAL = 0.9
 
 
+def _depth_grid(project_id: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """The region cut fine, with everybody's accepted seconds on every cell.
+
+    The one depth map behind both the progress figures and the picture of
+    the field: cells north-up across the region, and per filter the seconds
+    each cell has been given, credited from every accepted frame's footprint
+    in proportion to how much of the cell it covers.
+    """
+    goals = _goals(payload.get("goals") or {})
+    try:
+        region = collab.Region.read(payload.get("region") or {})
+    except (KeyError, TypeError, ValueError):
+        return None
+    if region.width <= 0 or region.height <= 0:
+        return None
+    if payload.get("kind") == "single":
+        cells = [{"row": 0, "column": 0, **region.payload()}]
+    else:
+        cell = max(abs(region.width), abs(region.height)) / PROGRESS_CELLS
+        cells = collab.grid(region, cell, cell, 0.0)
+    shot = [row["payload"] for row in store.contributions(project_id)
+            if row.get("accepted") and (row.get("payload") or {}).get("footprint")]
+    depth, _ = collab.coverage(cells, shot)
+    names = list(goals) or sorted({name for i in depth for name in depth[i]})
+    seconds = {name: [round(depth.get(i, {}).get(collab._key(name), 0.0), 1)
+                      for i in range(len(cells))] for name in names}
+    return {
+        "region": region.payload(),
+        "columns": (max(int(c.get("column", 0)) for c in cells) + 1) if cells else 0,
+        "rows": (max(int(c.get("row", 0)) for c in cells) + 1) if cells else 0,
+        "cells": [{"ra": c["ra"], "dec": c["dec"], "width": c["width"], "height": c["height"],
+                   "row": c.get("row", 0), "column": c.get("column", 0)} for c in cells],
+        "seconds": seconds,
+        "goals": goals,
+    }
+
+
 def _progress(project_id: str, payload: dict[str, Any]) -> dict[str, dict[str, float]]:
     """Per filter, how much of the region is at the goal depth, across everybody.
 
@@ -615,29 +668,17 @@ def _progress(project_id: str, payload: dict[str, Any]) -> dict[str, dict[str, f
     field at full depth, the field's average against the goal, and its
     thinnest cell. A project is done when the first of those is one.
     """
-    goals = _goals(payload.get("goals") or {})
-    try:
-        region = collab.Region.read(payload.get("region") or {})
-    except (KeyError, TypeError, ValueError):
+    grid = _depth_grid(project_id, payload)
+    if grid is None or not grid["goals"]:
         return {}
-    if not goals or region.width <= 0 or region.height <= 0:
-        return {}
-    if payload.get("kind") == "single":
-        cells = [{"row": 0, "column": 0, **region.payload()}]
-    else:
-        cell = max(abs(region.width), abs(region.height)) / PROGRESS_CELLS
-        cells = collab.grid(region, cell, cell, 0.0)
-    shot = [row["payload"] for row in store.contributions(project_id)
-            if row.get("accepted") and (row.get("payload") or {}).get("footprint")]
-    depth, _ = collab.coverage(cells, shot)
-    count = max(1, len(cells))
+    count = max(1, len(grid["cells"]))
     out: dict[str, dict[str, float]] = {}
-    for name, hours in goals.items():
+    for name, hours in grid["goals"].items():
         goal = float(hours) * 3600.0
         if goal <= 0:
             continue
-        key = collab._key(name)
-        fractions = [min(1.0, depth.get(i, {}).get(key, 0.0) / goal) for i in range(count)]
+        column = grid["seconds"].get(name) or [0.0] * count
+        fractions = [min(1.0, column[i] / goal) for i in range(count)]
         out[name] = {
             "goalHours": round(float(hours), 2),
             # Within a tenth of the goal counts as there: the outermost sliver

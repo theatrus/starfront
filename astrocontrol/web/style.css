@@ -2085,6 +2085,10 @@ label.inline.compact input[type="range"] { width: 150px; margin-top: 0; }
 
 /* A chunk's framing, on the closed box rather than behind a double-click. */
 .plan-framing.framing-inline { margin-top: 10px; }
+/* The depth map of a collaboration's field, in the opened box. */
+.depth-filters { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 6px; }
+.depth-filters .btn.active { background: var(--accent-dim); border-color: var(--accent-edge); color: var(--accent-text); }
+.depth-canvas { cursor: crosshair; }
 .plan-framing.framing-inline h4 { margin-top: 0; }
 /* Bandpass beside each filter slot. Narrow, because most filters have none. */
 .slot-nm-input { width: 58px; margin: 0; font-size: 11px; padding: 3px 5px; }

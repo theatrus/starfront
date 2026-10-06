@@ -1432,6 +1432,18 @@ whole = progress_of(DEEP)["progress"]["H"]
 case("the whole field at the goal is done, however the hours add up",
      whole["atGoal"] == 1.0 and whole["average"] >= 0.99 and whole["thinnest"] >= 0.9, str(whole))
 
+# The map itself: the cells of the region with everybody's seconds on each,
+# per filter, for the picture on the Plan tab.
+status, depth_map = call("GET", f"/api/v1/agent/projects/{DEEP}/depth", token=NB[0][1])
+case("a participant can fetch the depth map of a project",
+     status == 200 and depth_map["columns"] * depth_map["rows"] == len(depth_map["cells"])
+     and len(depth_map["seconds"]["H"]) == len(depth_map["cells"]),
+     f'{depth_map.get("columns")}x{depth_map.get("rows")}, {len(depth_map.get("cells", []))} cells')
+case("...and every cell carries the hours the whole field was given",
+     all(s >= 2 * 3600 * 0.9 for s in depth_map["seconds"]["H"])
+     and depth_map["progress"]["H"]["atGoal"] == 1.0,
+     f'min {min(depth_map["seconds"]["H"]):.0f}s')
+
 print()
 print(f"{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

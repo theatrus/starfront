@@ -1477,11 +1477,250 @@
       showFramings(detail);
     }, 0);
     // A collaboration chunk already shows its framing on the closed box, so the
-    // detail does not repeat it.
+    // detail does not repeat it; it shows the field's depth instead.
     if (!entry.collab) detail.appendChild(buildFraming(entry, data));
+    else detail.appendChild(buildDepthMap(entry));
     detail.appendChild(buildNightReport(entry));
     detail.appendChild(buildOptions(entry, data));
     return detail;
+  }
+
+  /* ----------------------------------------------------- the depth map */
+
+  /** How much exposure every part of a collaboration's field has had.
+   *
+   *  The region north-up, cut into the server's cells, each shaded by the
+   *  seconds everybody together has put on it against the goal: dark is
+   *  untouched, full mint is at depth. One filter at a time, with a button
+   *  per filter, because depth is per filter. This telescope's own panels
+   *  are outlined over it, tonight's in green, so "where am I being sent
+   *  against what is already there" is one picture.
+   */
+  function buildDepthMap(entry) {
+    const wrap = document.createElement('div');
+    wrap.className = 'plan-framing plan-depthmap';
+    const info = entry.collab || {};
+    const heading = document.createElement('h4');
+    heading.textContent = 'Depth across the field';
+    wrap.appendChild(heading);
+
+    const bar = document.createElement('div');
+    bar.className = 'depth-filters small';
+    wrap.appendChild(bar);
+
+    const stage = document.createElement('div');
+    stage.className = 'framing-stage';
+    const canvas = document.createElement('canvas');
+    canvas.className = 'framing-canvas depth-canvas';
+    stage.appendChild(canvas);
+    const status = document.createElement('div');
+    status.className = 'framing-status small muted';
+    status.textContent = 'Fetching the depth map…';
+    stage.appendChild(status);
+    wrap.appendChild(stage);
+
+    const caption = document.createElement('p');
+    caption.className = 'small muted';
+    wrap.appendChild(caption);
+
+    let grid = null;
+    let filter = '';
+    let hover = null;
+
+    const target = entry.target || {};
+    const share = new Set(info.share || []);
+    const panels = framingPanels(target);
+    const field = { width: target.panelWidth || 0, height: target.panelHeight || 0 };
+
+    function geometry() {
+      const region = grid.region;
+      const ra0 = region.ra, dec0 = region.dec;
+      // The picture holds the region with a small margin; one scale in
+      // pixels per degree on both axes, north up, east left.
+      const across = Math.max(0.5, Math.abs(region.width)) * 1.12;
+      const down = Math.max(0.5, Math.abs(region.height)) * 1.12;
+      const w = canvas.clientWidth || 600;
+      // Tall enough to show the field at its true shape, never taller than
+      // fits on a screen beside the rest of the box.
+      const h = Math.min(460, Math.round(w * Math.min(1.2, Math.max(0.45, down / across))));
+      const ratio = window.devicePixelRatio || 1;
+      canvas.width = Math.round(w * ratio);
+      canvas.height = Math.round(h * ratio);
+      canvas.style.height = `${h}px`;
+      const scale = Math.min(w / across, h / down);
+      return {
+        ra0, dec0, ratio, w, h, scale,
+        toCanvas(ra, dec) {
+          const off = skyToOffset(ra0, dec0, ra, dec);
+          if (!off) return null;
+          return [w / 2 - off[0] * scale, h / 2 - off[1] * scale];
+        },
+      };
+    }
+
+    function colour(fraction) {
+      const f = Math.max(0, Math.min(1, fraction));
+      // Dark slate through blue to the Starfront mint at full depth.
+      const stops = [[0, [22, 26, 36]], [0.5, [47, 104, 180]], [1, [126, 231, 165]]];
+      let a = stops[0], b = stops[stops.length - 1];
+      for (let i = 0; i < stops.length - 1; i += 1) {
+        if (f >= stops[i][0] && f <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+      }
+      const t = (f - a[0]) / Math.max(1e-6, b[0] - a[0]);
+      const mix = a[1].map((v, i) => Math.round(v + (b[1][i] - v) * t));
+      return `rgb(${mix[0]}, ${mix[1]}, ${mix[2]})`;
+    }
+
+    function draw() {
+      if (!grid) return;
+      const g = geometry();
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(g.ratio, 0, 0, g.ratio, 0, 0);
+      ctx.fillStyle = '#05070d';
+      ctx.fillRect(0, 0, g.w, g.h);
+      const goal = Number((grid.goals || {})[filter] || 0) * 3600;
+      const column = (grid.seconds || {})[filter] || [];
+      // Each cell as a rectangle on the tangent plane: its centre projected,
+      // its size in degrees of sky scaled, RA widened by the cosine already
+      // being sky degrees, so no further correction.
+      grid.cells.forEach((cell, index) => {
+        const centre = g.toCanvas(cell.ra, cell.dec);
+        if (!centre) return;
+        const cw = cell.width * g.scale, ch = cell.height * g.scale;
+        const seconds = Number(column[index] || 0);
+        const fraction = goal > 0 ? seconds / goal : (seconds > 0 ? 1 : 0);
+        ctx.fillStyle = colour(fraction);
+        ctx.fillRect(centre[0] - cw / 2, centre[1] - ch / 2, cw + 0.6, ch + 0.6);
+        if (hover === index) {
+          ctx.strokeStyle = '#fff';
+          ctx.lineWidth = 1.5;
+          ctx.strokeRect(centre[0] - cw / 2, centre[1] - ch / 2, cw, ch);
+        }
+      });
+      // The region's edge, dashed, north-up.
+      const r = grid.region;
+      const corner = (dra, ddec) => g.toCanvas(
+        r.ra + dra * (r.width / 2) / Math.max(0.05, Math.cos(r.dec * DEG)), r.dec + ddec * r.height / 2);
+      const corners = [corner(-1, 1), corner(1, 1), corner(1, -1), corner(-1, -1)].filter(Boolean);
+      if (corners.length === 4) {
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = 'rgba(200, 210, 230, 0.7)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        corners.forEach((p, i) => (i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])));
+        ctx.closePath();
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      // This telescope's panels over it: the share in green, the rest faint.
+      if (field.width > 0) {
+        for (const panel of panels) {
+          const centre = g.toCanvas(panel.ra, panel.dec);
+          if (!centre) continue;
+          const mine = share.has(panel.index);
+          const angle = ((panel.rotation || 0) - northAngle(g.ra0, g.dec0, panel.ra, panel.dec)) * DEG;
+          ctx.save();
+          ctx.translate(centre[0], centre[1]);
+          ctx.rotate(-angle);
+          ctx.strokeStyle = mine ? 'rgba(126, 231, 165, 0.95)' : 'rgba(120, 150, 210, 0.45)';
+          ctx.lineWidth = mine ? 1.6 : 1;
+          ctx.strokeRect(-field.width * g.scale / 2, -field.height * g.scale / 2,
+            field.width * g.scale, field.height * g.scale);
+          ctx.restore();
+          if (mine) {
+            ctx.fillStyle = 'rgba(126, 231, 165, 0.95)';
+            ctx.font = '600 10px "Segoe UI", system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(String(panel.index), centre[0], centre[1] + 3.5);
+          }
+        }
+      }
+      // Scale bar: the goal in hours, as the colour it is drawn in.
+      ctx.fillStyle = 'rgba(200, 210, 230, 0.8)';
+      ctx.font = '10px "Segoe UI", system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      for (let i = 0; i <= 10; i += 1) {
+        ctx.fillStyle = colour(i / 10);
+        ctx.fillRect(10 + i * 12, g.h - 16, 12, 6);
+      }
+      ctx.fillStyle = 'rgba(200, 210, 230, 0.85)';
+      ctx.fillText('0', 10, g.h - 20);
+      ctx.fillText(goal > 0 ? `${(goal / 3600).toFixed(0)}h` : 'shot', 10 + 11 * 12 + 4, g.h - 11);
+    }
+
+    function describe() {
+      if (!grid) return;
+      const prog = ((grid.progress || {})[filter]) || {};
+      const column = (grid.seconds || {})[filter] || [];
+      const total = column.reduce((a, b) => a + Number(b || 0), 0);
+      const cells = Math.max(1, column.length);
+      const goalHours = Number((grid.goals || {})[filter] || 0);
+      caption.textContent = `${filter}: ${Math.round(Number(prog.average || 0) * 100)}% done`
+        + (goalHours ? ` against ${goalHours.toFixed(0)}h at every point` : '')
+        + ` · ${Math.round(Number(prog.atGoal || 0) * 100)}% of the field at full depth`
+        + ` · thinnest part ${Math.round(Number(prog.thinnest || 0) * 100)}%`
+        + ` · ${(total / cells / 3600).toFixed(2)}h average on a cell`
+        + ' — everybody’s accepted frames, where they really landed. Hover a cell for its hours.';
+    }
+
+    function pick(name) {
+      filter = name;
+      bar.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.filter === name));
+      draw();
+      describe();
+    }
+
+    canvas.addEventListener('mousemove', (event) => {
+      if (!grid) return;
+      const g = geometry();
+      const rect = canvas.getBoundingClientRect();
+      const x = event.clientX - rect.left, y = event.clientY - rect.top;
+      let found = null;
+      grid.cells.forEach((cell, index) => {
+        const centre = g.toCanvas(cell.ra, cell.dec);
+        if (!centre) return;
+        const cw = cell.width * g.scale, ch = cell.height * g.scale;
+        if (Math.abs(x - centre[0]) <= cw / 2 && Math.abs(y - centre[1]) <= ch / 2) found = index;
+      });
+      if (found !== hover) {
+        hover = found;
+        draw();
+        if (found !== null) {
+          const seconds = Number(((grid.seconds || {})[filter] || [])[found] || 0);
+          const goal = Number((grid.goals || {})[filter] || 0);
+          canvas.title = `${(seconds / 3600).toFixed(2)}h of ${filter}`
+            + (goal ? ` (${Math.round(Math.min(1, seconds / 3600 / goal) * 100)}% of the ${goal.toFixed(0)}h goal)` : '');
+        } else canvas.title = '';
+      }
+    });
+    canvas.addEventListener('mouseleave', () => { hover = null; draw(); });
+
+    wrap.show = async () => {
+      if (grid) { draw(); return; }
+      if (!info.project) { status.textContent = 'No collaboration behind this target.'; return; }
+      try {
+        grid = await app.api(`/api/collab/projects/${encodeURIComponent(info.project)}/depth`);
+      } catch (error) {
+        status.textContent = `The depth map could not be fetched: ${error.message}`;
+        return;
+      }
+      status.hidden = true;
+      const names = Object.keys(grid.seconds || {});
+      bar.innerHTML = '';
+      for (const name of names) {
+        const button = document.createElement('button');
+        button.className = 'btn small ghost';
+        button.dataset.filter = name;
+        button.textContent = name;
+        button.addEventListener('click', () => pick(name));
+        bar.appendChild(button);
+      }
+      if (!names.length) { status.hidden = false; status.textContent = 'Nothing has been contributed yet.'; }
+      // Start on the filter this telescope is shooting tonight, if it is one.
+      const tonight = (info.visit && info.visit.filter) || names[0] || '';
+      pick(names.includes(tonight) ? tonight : names[0] || '');
+    };
+    return wrap;
   }
 
   /* ------------------------------------------------------- the framing */

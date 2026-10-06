@@ -2723,6 +2723,19 @@ def collab_project(project_id: str) -> dict[str, Any]:
     return _admin(collab_admin.project, project_id)
 
 
+@app.get("/api/collab/projects/{project_id}/depth")
+def collab_project_depth(project_id: str) -> dict[str, Any]:
+    """The depth map of a collaboration's field, for the Plan tab's picture.
+
+    Fetched from the server as this telescope, so any participant can see it,
+    not only the coordinator.
+    """
+    try:
+        return collab_client.depth(project_id)
+    except Exception as exc:                       # noqa: BLE001 - the server's words
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
 @app.post("/api/collab/projects")
 def collab_add_project(body: CollabProjectRequest) -> dict[str, Any]:
     source = body.region

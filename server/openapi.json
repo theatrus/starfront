@@ -1,0 +1,3735 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Starfront collaboration server",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/auth": {
+      "get": {
+        "summary": "Auth Status",
+        "description": "Whether people can sign in here, and what it takes to start a project.",
+        "operationId": "auth_status_api_v1_auth_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "summary": "Auth Login",
+        "description": "Begin a sign-in: a code for the program to hold and a page to open.\n\nThe device-code flow. Starfront opens `url` in the browser and polls\n`/api/v1/auth/poll` with `code` until somebody has signed in there.",
+        "operationId": "auth_login_api_v1_auth_login_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginStarted"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/discord/start": {
+      "get": {
+        "summary": "Auth Start",
+        "description": "The page Starfront opens: straight on to Discord.",
+        "operationId": "auth_start_auth_discord_start_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/discord/callback": {
+      "get": {
+        "summary": "Auth Callback",
+        "description": "Discord sends the person back here. Check them, bind them to the code.",
+        "operationId": "auth_callback_auth_discord_callback_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "State"
+            }
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Error"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/poll": {
+      "get": {
+        "summary": "Auth Poll",
+        "description": "Has anybody signed in on this code yet? The token comes back once.",
+        "operationId": "auth_poll_api_v1_auth_poll_get",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 64,
+              "default": "",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginPoll"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "summary": "Auth Me",
+        "operationId": "auth_me_api_v1_auth_me_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "summary": "Auth Logout",
+        "operationId": "auth_logout_api_v1_auth_logout_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignedOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/hello": {
+      "post": {
+        "summary": "Hello",
+        "description": "Register a heartbeat and say what this rig is.\n\nThe profile is what makes the pre-flight check possible \u2014 telling somebody\ntheir 7 nm Ha will be rejected before they spend a night on it rather than\nafter.",
+        "operationId": "hello_api_v1_agent_hello_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelloRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelloResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/presence": {
+      "get": {
+        "summary": "Presence",
+        "description": "Who is on the sky right now: every telescope that has checked in\nlately, where it points and what it is doing, for the chart and the\ncounts on the Collab tab. Telescopes silent for a day drop off.",
+        "operationId": "presence_api_v1_presence_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/task": {
+      "get": {
+        "summary": "Current Task",
+        "description": "What this telescope should be shooting.\n\nThe whole point of the server, from an observatory's side. Returns the\ntask and a version; an agent that already has that version has nothing to\ndo, which keeps a poll every few minutes free.\n\n`night` is the night the rig is in, as it names its own nights. Its\npanels for a night are dealt once for that night and held \u2014 they must not\nmove under a run because somebody else's frames arrived at 2 a.m. \u2014 and\nare dealt afresh the first time it asks in the next one. A client that\ndoes not say falls back to a list held for twenty hours.\n\n`moon` and `moonUp` are the rig's own sky tonight: how much of the Moon\nis lit, and the fraction of its dark hours the Moon is above its horizon.\nThey decide whether tonight is a narrowband night for it; see\n`collab.choose_filter`. The server has no idea where any rig is, so the\nrig has to say.",
+        "operationId": "current_task_api_v1_agent_task_get",
+        "parameters": [
+          {
+            "name": "night",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 16,
+              "default": "",
+              "title": "Night"
+            }
+          },
+          {
+            "name": "moon",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 1.0,
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Moon"
+            }
+          },
+          {
+            "name": "moonUp",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "number",
+                  "maximum": 1.0,
+                  "minimum": 0.0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Moonup"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/projects/{project_id}/depth": {
+      "get": {
+        "summary": "Project Depth",
+        "description": "The depth map of a project: everybody's seconds on every cell of the\nregion, per filter, for the picture of the field on the Plan tab.",
+        "operationId": "project_depth_api_v1_agent_projects__project_id__depth_get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepthMap"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/projects": {
+      "get": {
+        "summary": "Open Projects",
+        "description": "Every project that is open, and whether this telescope can help.\n\nBrowsing is how somebody finds a collaboration to join, and the judgement\nof whether they qualify is made here as well as in their own program \u2014\ntheirs so they are told before they waste a night, this one because a\ncheck that only runs on the client is not a check.",
+        "operationId": "open_projects_api_v1_agent_projects_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenProjects"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/projects/{project_id}/join": {
+      "post": {
+        "summary": "Join Project",
+        "description": "Take a share of a project this telescope qualifies for.\n\nNobody deals this out. A rig that meets the requirements asks, and the\nserver hands it the part of the sky least spoken for \u2014 sized to *its own*\nfield, because depth is integration time at a point on the sky and chunks\nfrom different cameras have no need to line up.\n\nThe requirements are checked here, against the profile the rig last\nreported, rather than taken on the word of whoever is asking.",
+        "operationId": "join_project_api_v1_agent_projects__project_id__join_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JoinRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JoinResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/task/{task_id}": {
+      "post": {
+        "summary": "Set Task State",
+        "description": "Accept, decline or finish a task.\n\nAccepting is a real step rather than a formality: an assignment that\nsilently rewrote what somebody's mount did tonight would be the software\ngoing rogue, however well meant.",
+        "operationId": "set_task_state_api_v1_agent_task__task_id__post",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskStateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/report": {
+      "post": {
+        "summary": "Report",
+        "description": "Hand back what was actually captured, and hear whether it counts.\n\nJudged here rather than taken on trust, because the rules belong to the\nproject and an agent should not be able to mark its own homework. The\nverdict is advisory \u2014 a coordinator can overrule it.",
+        "operationId": "report_api_v1_agent_report_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agents": {
+      "post": {
+        "summary": "Create Agent",
+        "description": "Enrol a telescope and mint its token.\n\nAnybody signed in may enrol their own telescopes - that is what signing in\nis for - and the telescope is theirs from then on. The token is shown once,\nhere, and kept nowhere but the observatory it is for.",
+        "operationId": "create_agent_api_v1_agents_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Agents",
+        "description": "The owner sees every telescope; a member sees their own.",
+        "operationId": "list_agents_api_v1_agents_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "post": {
+        "summary": "Create Project",
+        "operationId": "create_project_api_v1_projects_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Projects",
+        "description": "Open to anyone: browsing is how people find a collab to join.",
+        "operationId": "list_projects_api_v1_projects_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectList"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}": {
+      "put": {
+        "summary": "Update Project",
+        "description": "Change what a project asks for.\n\nA coordinator learns as the season goes: the Ha limit was too strict, the\nregion should have taken in the next nebula over, the depth goal was\nreached. Starting a new project for each of those would lose the ledger.\nOnly what is sent is changed; a field left out is left alone.\n\nContributors are not re-judged retroactively \u2014 a night accepted under the\nold rules stays accepted \u2014 and every rig on it finds out on its next poll,\nbecause the requirements travel with the task.",
+        "operationId": "update_project_api_v1_projects__project_id__put",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Read Project",
+        "operationId": "read_project_api_v1_projects__project_id__get",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{project_id}/tasks": {
+      "post": {
+        "summary": "Create Task",
+        "description": "Delegate a chunk of sky to one telescope.",
+        "operationId": "create_task_api_v1_projects__project_id__tasks_post",
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/contributions/{row_id}/verdict": {
+      "post": {
+        "summary": "Override Verdict",
+        "description": "Overrule the automatic judgement.\n\nSeeing varies, and a night the numbers reject may be the only data anybody\nhas on that patch of sky. A verdict that could not be overruled would make\nthe rules more authoritative than the person who wrote them. The person\nwho wrote them - the project's owner - is who may overrule.",
+        "operationId": "override_verdict_api_v1_contributions__row_id__verdict_post",
+        "parameters": [
+          {
+            "name": "row_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Row Id"
+            }
+          },
+          {
+            "name": "accepted",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "boolean",
+              "title": "Accepted"
+            }
+          },
+          {
+            "name": "reason",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Reason"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContributionEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "summary": "Health",
+        "operationId": "health_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Agent": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner",
+            "default": ""
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id",
+            "default": ""
+          },
+          "created": {
+            "type": "number",
+            "title": "Created"
+          },
+          "seen": {
+            "type": "number",
+            "title": "Seen",
+            "default": 0.0
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RigProfile"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Profile"
+          },
+          "presence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Presence"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created"
+        ],
+        "title": "Agent",
+        "description": "An enrolled telescope, without its token."
+      },
+      "AgentCreated": {
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/Agent"
+          },
+          "token": {
+            "type": "string",
+            "title": "Token",
+            "description": "Shown once. Keep it on the telescope it is for."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "agent",
+          "token"
+        ],
+        "title": "AgentCreated"
+      },
+      "AgentList": {
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/Agent"
+            },
+            "type": "array",
+            "title": "Agents"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "agents"
+        ],
+        "title": "AgentList"
+      },
+      "AgentRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "owner": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Owner",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "AgentRequest"
+      },
+      "AuthStatus": {
+        "properties": {
+          "discord": {
+            "type": "boolean",
+            "title": "Discord"
+          },
+          "guild": {
+            "type": "string",
+            "title": "Guild"
+          },
+          "roleRequired": {
+            "type": "boolean",
+            "title": "Rolerequired"
+          },
+          "publicUrl": {
+            "type": "string",
+            "title": "Publicurl"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "discord",
+          "guild",
+          "roleRequired",
+          "publicUrl"
+        ],
+        "title": "AuthStatus"
+      },
+      "Cell": {
+        "properties": {
+          "ra": {
+            "type": "number",
+            "title": "Ra",
+            "description": "Right ascension of the centre, degrees."
+          },
+          "dec": {
+            "type": "number",
+            "title": "Dec",
+            "description": "Declination of the centre, degrees."
+          },
+          "width": {
+            "type": "number",
+            "title": "Width",
+            "description": "Width on the sky, degrees."
+          },
+          "height": {
+            "type": "number",
+            "title": "Height",
+            "description": "Height on the sky, degrees."
+          },
+          "rotation": {
+            "type": "number",
+            "title": "Rotation",
+            "description": "Position angle to shoot at, degrees.",
+            "default": 0.0
+          },
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "column": {
+            "type": "integer",
+            "title": "Column"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ra",
+          "dec",
+          "width",
+          "height",
+          "row",
+          "column"
+        ],
+        "title": "Cell",
+        "description": "One cell of a rig's own tiling of a project, and where it sits."
+      },
+      "Check": {
+        "properties": {
+          "check": {
+            "type": "string",
+            "title": "Check"
+          },
+          "ok": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ok"
+          },
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "check",
+          "ok",
+          "detail"
+        ],
+        "title": "Check"
+      },
+      "Compatibility": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "certain": {
+            "type": "boolean",
+            "title": "Certain"
+          },
+          "checks": {
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            },
+            "type": "array",
+            "title": "Checks"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ok",
+          "certain",
+          "checks",
+          "summary"
+        ],
+        "title": "Compatibility",
+        "description": "Whether a rig meets a project's requirements, check by check."
+      },
+      "Contribution": {
+        "properties": {
+          "project": {
+            "type": "string",
+            "title": "Project",
+            "default": ""
+          },
+          "task": {
+            "type": "string",
+            "title": "Task",
+            "default": ""
+          },
+          "night": {
+            "type": "string",
+            "title": "Night",
+            "default": ""
+          },
+          "filterName": {
+            "type": "string",
+            "title": "Filtername",
+            "default": ""
+          },
+          "panel": {
+            "type": "string",
+            "title": "Panel",
+            "default": ""
+          },
+          "frames": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frames",
+            "default": 0
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds",
+            "default": 0.0
+          },
+          "exposure": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exposure",
+            "description": "Sub length, seconds.",
+            "default": 0.0
+          },
+          "footprint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Region"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The solved footprint of the panel."
+          },
+          "scale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale",
+            "description": "Arcseconds per pixel."
+          },
+          "focalLength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focallength"
+          },
+          "hfr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hfr",
+            "description": "Mean star size over the night, arcseconds."
+          },
+          "guideRms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guiderms",
+            "description": "Mean guiding error, arcseconds."
+          },
+          "moonIllumination": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moonillumination"
+          },
+          "moonSeparation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moonseparation",
+            "description": "Degrees."
+          },
+          "calibrated": {
+            "type": "boolean",
+            "title": "Calibrated",
+            "default": false
+          },
+          "bandpass": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bandpass",
+            "description": "nm, of the filter used."
+          },
+          "colour": {
+            "type": "boolean",
+            "title": "Colour",
+            "default": false
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Contribution",
+        "description": "One night's work on one filter and panel, as measured."
+      },
+      "ContributionEnvelope": {
+        "properties": {
+          "contribution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributionRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "contribution"
+        ],
+        "title": "ContributionEnvelope"
+      },
+      "ContributionRow": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "task": {
+            "type": "string",
+            "title": "Task",
+            "default": ""
+          },
+          "night": {
+            "type": "string",
+            "title": "Night",
+            "default": ""
+          },
+          "filter": {
+            "type": "string",
+            "title": "Filter",
+            "default": ""
+          },
+          "panel": {
+            "type": "string",
+            "title": "Panel",
+            "default": ""
+          },
+          "seconds": {
+            "type": "number",
+            "title": "Seconds",
+            "default": 0.0
+          },
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          },
+          "overridden": {
+            "type": "boolean",
+            "title": "Overridden",
+            "default": false
+          },
+          "received": {
+            "type": "number",
+            "title": "Received"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/Contribution"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Verdict"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Verdict"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "project",
+          "agent",
+          "accepted",
+          "received",
+          "payload",
+          "verdict"
+        ],
+        "title": "ContributionRow",
+        "description": "A stored contribution, with its verdict."
+      },
+      "DepthCell": {
+        "properties": {
+          "ra": {
+            "type": "number",
+            "title": "Ra"
+          },
+          "dec": {
+            "type": "number",
+            "title": "Dec"
+          },
+          "width": {
+            "type": "number",
+            "title": "Width"
+          },
+          "height": {
+            "type": "number",
+            "title": "Height"
+          },
+          "row": {
+            "type": "integer",
+            "title": "Row"
+          },
+          "column": {
+            "type": "integer",
+            "title": "Column"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ra",
+          "dec",
+          "width",
+          "height",
+          "row",
+          "column"
+        ],
+        "title": "DepthCell"
+      },
+      "DepthMap": {
+        "properties": {
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "region": {
+            "$ref": "#/components/schemas/Region"
+          },
+          "columns": {
+            "type": "integer",
+            "title": "Columns"
+          },
+          "rows": {
+            "type": "integer",
+            "title": "Rows"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/DepthCell"
+            },
+            "type": "array",
+            "title": "Cells"
+          },
+          "seconds": {
+            "additionalProperties": {
+              "items": {
+                "type": "number"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Seconds",
+            "description": "Per filter, seconds on each cell, in the order of `cells`."
+          },
+          "goals": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Goals",
+            "description": "Hours wanted per filter at every point."
+          },
+          "progress": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/FilterProgress"
+            },
+            "type": "object",
+            "title": "Progress"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "project",
+          "name",
+          "region",
+          "columns",
+          "rows",
+          "cells",
+          "seconds",
+          "goals",
+          "progress"
+        ],
+        "title": "DepthMap",
+        "description": "Everybody's accepted seconds on every cell of a fine grid over the region, per filter."
+      },
+      "FilterProgress": {
+        "properties": {
+          "goalHours": {
+            "type": "number",
+            "title": "Goalhours"
+          },
+          "atGoal": {
+            "type": "number",
+            "title": "Atgoal",
+            "description": "Share of the region at (within a tenth of) the goal depth, 0-1."
+          },
+          "average": {
+            "type": "number",
+            "title": "Average",
+            "description": "The region's depth against the goal, each point capped at the goal, 0-1."
+          },
+          "thinnest": {
+            "type": "number",
+            "title": "Thinnest",
+            "description": "The least-covered point's depth against the goal, 0-1."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "goalHours",
+          "atGoal",
+          "average",
+          "thinnest"
+        ],
+        "title": "FilterProgress",
+        "description": "How far one filter has got across the whole region."
+      },
+      "FilterTask": {
+        "properties": {
+          "filter": {
+            "type": "string",
+            "title": "Filter"
+          },
+          "exposure": {
+            "type": "number",
+            "title": "Exposure",
+            "description": "Sub length, seconds."
+          },
+          "hours": {
+            "type": "number",
+            "title": "Hours",
+            "description": "Depth wanted on each panel, hours."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "filter",
+          "exposure",
+          "hours"
+        ],
+        "title": "FilterTask",
+        "description": "One filter's share of a task."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "Health": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "protocol": {
+            "type": "integer",
+            "title": "Protocol"
+          },
+          "time": {
+            "type": "number",
+            "title": "Time"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "adminConfigured": {
+            "type": "boolean",
+            "title": "Adminconfigured"
+          },
+          "discord": {
+            "type": "boolean",
+            "title": "Discord"
+          },
+          "roleRequired": {
+            "type": "boolean",
+            "title": "Rolerequired"
+          },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Features",
+            "description": "Optional parts offered, such as \"signin\"."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ok",
+          "protocol",
+          "time",
+          "version",
+          "adminConfigured",
+          "discord",
+          "roleRequired"
+        ],
+        "title": "Health"
+      },
+      "HelloRequest": {
+        "properties": {
+          "protocol": {
+            "type": "integer",
+            "title": "Protocol",
+            "default": 1
+          },
+          "profile": {
+            "$ref": "#/components/schemas/RigProfile"
+          },
+          "presence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Presence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "HelloRequest",
+        "description": "A telescope saying what it is and, if it likes, where it points."
+      },
+      "HelloResponse": {
+        "properties": {
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "protocol": {
+            "type": "integer",
+            "title": "Protocol"
+          },
+          "serverTime": {
+            "type": "number",
+            "title": "Servertime"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "agent",
+          "name",
+          "protocol",
+          "serverTime"
+        ],
+        "title": "HelloResponse"
+      },
+      "JoinRequest": {
+        "properties": {
+          "hours": {
+            "type": "number",
+            "maximum": 24.0,
+            "minimum": 0.0,
+            "title": "Hours",
+            "description": "Hours per filter, capped by the project's goal; 0 takes the goal.",
+            "default": 0.0
+          },
+          "exposure": {
+            "type": "number",
+            "maximum": 3600.0,
+            "minimum": 0.0,
+            "title": "Exposure",
+            "description": "Sub length for a filter with no entry in `exposures`; 0 takes the middle of the project's range.",
+            "default": 0.0
+          },
+          "exposures": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Exposures",
+            "description": "The rig's own sub length per filter."
+          },
+          "night": {
+            "type": "string",
+            "maxLength": 16,
+            "title": "Night",
+            "description": "The night the rig is in, so the first deal is tonight's.",
+            "default": ""
+          },
+          "moon": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moon",
+            "description": "How much of the Moon is lit tonight, 0-1."
+          },
+          "moonUp": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moonup",
+            "description": "The fraction of the dark hours the Moon is up, 0-1."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "JoinRequest",
+        "description": "Signing up for a share of a project."
+      },
+      "JoinResponse": {
+        "properties": {
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/Requirements"
+          },
+          "alreadyJoined": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alreadyjoined"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "task",
+          "requirements"
+        ],
+        "title": "JoinResponse"
+      },
+      "LoginPoll": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "done",
+              "claimed",
+              "expired"
+            ],
+            "title": "State"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SignedInUser"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "LoginPoll"
+      },
+      "LoginStarted": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "title": "Expiresin"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "code",
+          "url",
+          "expiresIn"
+        ],
+        "title": "LoginStarted"
+      },
+      "Me": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "admin": {
+            "type": "boolean",
+            "title": "Admin"
+          },
+          "canStart": {
+            "type": "boolean",
+            "title": "Canstart"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "admin",
+          "canStart"
+        ],
+        "title": "Me"
+      },
+      "OpenProject": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "coordinator": {
+            "type": "string",
+            "title": "Coordinator"
+          },
+          "ownerId": {
+            "type": "string",
+            "title": "Ownerid"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Region"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              }
+            ],
+            "title": "Region"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "mosaic"
+            ],
+            "title": "Kind"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/Requirements"
+          },
+          "goals": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Goals"
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes"
+          },
+          "compatibility": {
+            "$ref": "#/components/schemas/Compatibility"
+          },
+          "joined": {
+            "type": "boolean",
+            "title": "Joined"
+          },
+          "collected": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Collected",
+            "description": "Accepted hours per filter."
+          },
+          "participants": {
+            "type": "integer",
+            "title": "Participants"
+          },
+          "participantsOnline": {
+            "type": "integer",
+            "title": "Participantsonline"
+          },
+          "participantNames": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Participantnames"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/FilterProgress"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress",
+            "description": "Per filter, across everybody."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "coordinator",
+          "ownerId",
+          "region",
+          "kind",
+          "requirements",
+          "goals",
+          "notes",
+          "compatibility",
+          "joined",
+          "collected",
+          "participants",
+          "participantsOnline",
+          "participantNames"
+        ],
+        "title": "OpenProject",
+        "description": "An open project as a telescope browsing for one sees it."
+      },
+      "OpenProjects": {
+        "properties": {
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/OpenProject"
+            },
+            "type": "array",
+            "title": "Projects"
+          },
+          "protocol": {
+            "type": "integer",
+            "title": "Protocol"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "projects",
+          "protocol"
+        ],
+        "title": "OpenProjects"
+      },
+      "Presence": {
+        "properties": {
+          "ra": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ra",
+            "description": "Hours."
+          },
+          "dec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dec",
+            "description": "Degrees."
+          },
+          "state": {
+            "type": "string",
+            "title": "State",
+            "default": ""
+          },
+          "target": {
+            "type": "string",
+            "title": "Target",
+            "default": ""
+          },
+          "project": {
+            "type": "string",
+            "title": "Project",
+            "default": ""
+          },
+          "telescope": {
+            "type": "string",
+            "title": "Telescope",
+            "description": "What to call the telescope on the group's chart, such as its equipment profile's name.",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Presence",
+        "description": "Where a telescope points and what it is doing, as it chooses to say."
+      },
+      "PresenceResponse": {
+        "properties": {
+          "telescopes": {
+            "items": {
+              "$ref": "#/components/schemas/TelescopePresence"
+            },
+            "type": "array",
+            "title": "Telescopes"
+          },
+          "online": {
+            "type": "integer",
+            "title": "Online"
+          },
+          "people": {
+            "type": "integer",
+            "title": "People"
+          },
+          "onlineSeconds": {
+            "type": "integer",
+            "title": "Onlineseconds"
+          },
+          "serverTime": {
+            "type": "number",
+            "title": "Servertime"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "telescopes",
+          "online",
+          "people",
+          "onlineSeconds",
+          "serverTime"
+        ],
+        "title": "PresenceResponse"
+      },
+      "Project": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "coordinator": {
+            "type": "string",
+            "title": "Coordinator",
+            "default": ""
+          },
+          "owner_id": {
+            "type": "string",
+            "title": "Owner Id",
+            "default": ""
+          },
+          "created": {
+            "type": "number",
+            "title": "Created"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status",
+            "default": "open"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/ProjectPayload"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created",
+          "payload"
+        ],
+        "title": "Project"
+      },
+      "ProjectDetail": {
+        "properties": {
+          "project": {
+            "$ref": "#/components/schemas/Project"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionRow"
+            },
+            "type": "array",
+            "title": "Contributions"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "project",
+          "tasks",
+          "contributions"
+        ],
+        "title": "ProjectDetail"
+      },
+      "ProjectEnvelope": {
+        "properties": {
+          "project": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Project"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "project"
+        ],
+        "title": "ProjectEnvelope"
+      },
+      "ProjectList": {
+        "properties": {
+          "projects": {
+            "items": {
+              "$ref": "#/components/schemas/Project"
+            },
+            "type": "array",
+            "title": "Projects"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "projects"
+        ],
+        "title": "ProjectList"
+      },
+      "ProjectPayload": {
+        "properties": {
+          "region": {
+            "$ref": "#/components/schemas/Region"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "mosaic"
+            ],
+            "title": "Kind",
+            "default": "mosaic"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/Requirements"
+          },
+          "goals": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Goals",
+            "description": "Depth wanted at every point, per filter, in hours."
+          },
+          "notes": {
+            "type": "string",
+            "title": "Notes",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "region"
+        ],
+        "title": "ProjectPayload",
+        "description": "A project's definition, as stored."
+      },
+      "ProjectRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "coordinator": {
+            "type": "string",
+            "maxLength": 80,
+            "title": "Coordinator",
+            "default": ""
+          },
+          "region": {
+            "$ref": "#/components/schemas/Region"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "mosaic"
+            ],
+            "title": "Kind",
+            "default": "mosaic"
+          },
+          "requirements": {
+            "$ref": "#/components/schemas/Requirements"
+          },
+          "goals": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "type": "object",
+            "title": "Goals",
+            "description": "Hours per filter at every point."
+          },
+          "notes": {
+            "type": "string",
+            "maxLength": 2000,
+            "title": "Notes",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "name",
+          "region"
+        ],
+        "title": "ProjectRequest"
+      },
+      "ProjectUpdateRequest": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Region"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "single",
+                  "mosaic"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Requirements"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "goals": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goals"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "closed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ProjectUpdateRequest",
+        "description": "Changing a project after it was started. Every field is optional."
+      },
+      "Recorded": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          },
+          "duplicate": {
+            "type": "boolean",
+            "title": "Duplicate"
+          },
+          "verdict": {
+            "$ref": "#/components/schemas/Verdict"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "accepted",
+          "duplicate",
+          "verdict"
+        ],
+        "title": "Recorded"
+      },
+      "Region": {
+        "properties": {
+          "ra": {
+            "type": "number",
+            "title": "Ra",
+            "description": "Right ascension of the centre, degrees."
+          },
+          "dec": {
+            "type": "number",
+            "title": "Dec",
+            "description": "Declination of the centre, degrees."
+          },
+          "width": {
+            "type": "number",
+            "title": "Width",
+            "description": "Width on the sky, degrees."
+          },
+          "height": {
+            "type": "number",
+            "title": "Height",
+            "description": "Height on the sky, degrees."
+          },
+          "rotation": {
+            "type": "number",
+            "title": "Rotation",
+            "description": "Position angle to shoot at, degrees.",
+            "default": 0.0
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "ra",
+          "dec",
+          "width",
+          "height"
+        ],
+        "title": "Region",
+        "description": "A rectangle of sky. Degrees throughout; `ra` is degrees, not hours.\n\n`width` and `height` are angles on the sky. `rotation` is the position\nangle contributing cameras should shoot at; the rectangle itself is\nnorth-up."
+      },
+      "ReportRequest": {
+        "properties": {
+          "contributions": {
+            "items": {
+              "$ref": "#/components/schemas/Contribution"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "Contributions"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "ReportRequest",
+        "description": "One night's work: one record per filter and panel."
+      },
+      "ReportResponse": {
+        "properties": {
+          "recorded": {
+            "items": {
+              "$ref": "#/components/schemas/Recorded"
+            },
+            "type": "array",
+            "title": "Recorded"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "recorded"
+        ],
+        "title": "ReportResponse"
+      },
+      "Requirements": {
+        "properties": {
+          "minFocalLength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minfocallength"
+          },
+          "maxFocalLength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxfocallength"
+          },
+          "minScale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minscale",
+            "description": "Arcseconds per pixel."
+          },
+          "maxScale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxscale",
+            "description": "Arcseconds per pixel."
+          },
+          "acceptColour": {
+            "type": "boolean",
+            "title": "Acceptcolour",
+            "default": true
+          },
+          "colourMaxMoon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Colourmaxmoon",
+            "description": "Moon illumination (0-1) above which a colour camera's night is refused."
+          },
+          "maxHfr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxhfr",
+            "description": "Mean star size over a night, arcseconds."
+          },
+          "maxGuideRms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxguiderms",
+            "description": "Mean guiding error, arcseconds."
+          },
+          "minExposure": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minexposure",
+            "description": "Seconds."
+          },
+          "maxExposure": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxexposure",
+            "description": "Seconds."
+          },
+          "filters": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Filters",
+            "description": "Filters wanted, to the widest bandpass accepted in nm, or null for any."
+          },
+          "maxMoonIllumination": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxmoonillumination"
+          },
+          "minMoonSeparation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minmoonseparation",
+            "description": "Degrees."
+          },
+          "minAltitude": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minaltitude",
+            "description": "Degrees."
+          },
+          "requireCalibrated": {
+            "type": "boolean",
+            "title": "Requirecalibrated",
+            "default": false
+          },
+          "minFramesPerVisit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Minframespervisit",
+            "description": "Fewest frames a visit to one panel is worth.",
+            "default": 10
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Requirements",
+        "description": "What a project will take. Star size and guiding are in arcseconds."
+      },
+      "RigProfile": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "focalLength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Focallength",
+            "description": "Millimetres."
+          },
+          "pixelSize": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pixelsize",
+            "description": "Microns, unbinned."
+          },
+          "sensorWidth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensorwidth",
+            "description": "Pixels, unbinned."
+          },
+          "sensorHeight": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sensorheight",
+            "description": "Pixels, unbinned."
+          },
+          "binning": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binning",
+            "default": 1
+          },
+          "filters": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Filters",
+            "description": "Filter name to bandpass in nm, or null if unknown."
+          },
+          "colour": {
+            "type": "boolean",
+            "title": "Colour",
+            "description": "A one-shot colour camera.",
+            "default": false
+          },
+          "rotation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotation",
+            "description": "Camera position angle in degrees when it cannot be turned; null when a rotator can set any angle."
+          },
+          "typicalHfr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typicalhfr",
+            "description": "Arcseconds."
+          },
+          "typicalGuideRms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typicalguiderms",
+            "description": "Arcseconds."
+          },
+          "exposures": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Exposures",
+            "description": "Sub length in seconds per filter: what the rig's darks are built for."
+          },
+          "hoursPerNight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hourspernight",
+            "description": "Hours a night the rig gives; null means as long as targets are up."
+          },
+          "windowFrom": {
+            "type": "string",
+            "title": "Windowfrom",
+            "description": "Local clock time, such as \"21:00\".",
+            "default": ""
+          },
+          "windowTo": {
+            "type": "string",
+            "title": "Windowto",
+            "description": "Local clock time.",
+            "default": ""
+          },
+          "scale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scale",
+            "description": "Arcseconds per pixel, computed."
+          },
+          "field": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field",
+            "description": "Field of view [width, height] in degrees, computed."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "RigProfile",
+        "description": "What a telescope is and what it achieves, sent with every hello."
+      },
+      "SignedInUser": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "avatar": {
+            "type": "string",
+            "title": "Avatar",
+            "default": ""
+          },
+          "admin": {
+            "type": "boolean",
+            "title": "Admin"
+          },
+          "canStart": {
+            "type": "boolean",
+            "title": "Canstart"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "admin",
+          "canStart"
+        ],
+        "title": "SignedInUser"
+      },
+      "SignedOut": {
+        "properties": {
+          "signedOut": {
+            "type": "boolean",
+            "title": "Signedout"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "signedOut"
+        ],
+        "title": "SignedOut"
+      },
+      "Task": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "projectName": {
+            "type": "string",
+            "title": "Projectname",
+            "default": ""
+          },
+          "agent": {
+            "type": "string",
+            "title": "Agent",
+            "default": ""
+          },
+          "region": {
+            "$ref": "#/components/schemas/Region"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/FilterTask"
+            },
+            "type": "array",
+            "title": "Filters"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "offered",
+              "accepted",
+              "declined",
+              "complete",
+              "superseded"
+            ],
+            "title": "State",
+            "default": "offered"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
+          "issued": {
+            "type": "number",
+            "title": "Issued",
+            "default": 0.0
+          },
+          "note": {
+            "type": "string",
+            "title": "Note",
+            "default": ""
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/Cell"
+            },
+            "type": "array",
+            "title": "Cells"
+          },
+          "share": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Share",
+            "description": "Indexes into `cells` to shoot tonight, in order."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "single",
+              "mosaic"
+            ],
+            "title": "Kind",
+            "default": "mosaic"
+          },
+          "visit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Visit"
+              },
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visit"
+          },
+          "assignedNight": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignednight"
+          },
+          "assignedAt": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assignedat"
+          },
+          "dealtHours": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dealthours"
+          },
+          "tiledRotation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiledrotation"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "project",
+          "region"
+        ],
+        "title": "Task",
+        "description": "A rig's share of a project: the whole region tiled with its own camera,\nand which of those cells are its to shoot tonight."
+      },
+      "TaskEnvelope": {
+        "properties": {
+          "task": {
+            "$ref": "#/components/schemas/Task"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "task"
+        ],
+        "title": "TaskEnvelope"
+      },
+      "TaskRequest": {
+        "properties": {
+          "agent": {
+            "type": "string",
+            "title": "Agent"
+          },
+          "region": {
+            "$ref": "#/components/schemas/Region"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/FilterTask"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Filters"
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500,
+            "title": "Note",
+            "default": ""
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "agent",
+          "region"
+        ],
+        "title": "TaskRequest"
+      },
+      "TaskResponse": {
+        "properties": {
+          "task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Task"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": "array",
+            "title": "Tasks"
+          },
+          "requirementsByProject": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Requirements"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirementsbyproject"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "protocol": {
+            "type": "integer",
+            "title": "Protocol"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Requirements"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "task",
+          "tasks",
+          "version",
+          "protocol"
+        ],
+        "title": "TaskResponse",
+        "description": "What a telescope should be shooting: every share it holds."
+      },
+      "TaskStateRequest": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "declined",
+              "complete"
+            ],
+            "title": "State"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "state"
+        ],
+        "title": "TaskStateRequest"
+      },
+      "TelescopePresence": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "What the telescope says to call it, or the name it was enrolled under."
+          },
+          "enrolledAs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enrolledas",
+            "description": "The name it was enrolled under."
+          },
+          "owner": {
+            "type": "string",
+            "title": "Owner"
+          },
+          "ra": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ra"
+          },
+          "dec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dec"
+          },
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "project": {
+            "type": "string",
+            "title": "Project"
+          },
+          "ageSeconds": {
+            "type": "integer",
+            "title": "Ageseconds"
+          },
+          "online": {
+            "type": "boolean",
+            "title": "Online"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "owner",
+          "ra",
+          "dec",
+          "state",
+          "target",
+          "project",
+          "ageSeconds",
+          "online"
+        ],
+        "title": "TelescopePresence",
+        "description": "One telescope as the group sees it."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "Verdict": {
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "title": "Accepted"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "unverified": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unverified"
+          },
+          "summary": {
+            "type": "string",
+            "title": "Summary",
+            "default": ""
+          },
+          "overriddenBy": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overriddenby"
+          },
+          "overrideReason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overridereason"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "accepted"
+        ],
+        "title": "Verdict"
+      },
+      "Visit": {
+        "properties": {
+          "seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "frames": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Frames",
+            "description": "Frames per filter on each panel tonight."
+          },
+          "filter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filter",
+            "description": "Tonight's one filter on a mosaic."
+          },
+          "moon": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moon",
+            "description": "How much the Moon spoiled the night the list was made for, 0-1."
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "title": "Visit",
+        "description": "Tonight's slice of a task: how long on each panel, and in what."
+      }
+    }
+  }
+}

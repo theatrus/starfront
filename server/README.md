@@ -154,6 +154,25 @@ A task arrives **offered** and stays that way until somebody accepts it. An
 assignment that silently rewrote what a mount did tonight would be the software
 going rogue, however well meant.
 
+## Types
+
+Every request and response has a type in `server/schemas.py`: the rig profile,
+regions and cells, requirements, tasks, contributions, verdicts and presence.
+They write down the dictionaries the protocol already uses, so nothing about
+the wire changed:
+
+- Field names are the ones already sent.
+- Fields a model does not know are kept, so a newer program is never refused.
+- Numbers are read as `astrocontrol/collab.py` reads them: a blank or unreadable
+  value is unknown, not an error.
+- Responses carry exactly the keys they did before.
+
+FastAPI publishes the result at `/openapi.json` and `/docs`. The same document
+is committed as `server/openapi.json`; after changing a type, run
+`python tools/export_collab_api.py` and commit what changed.
+`python tools/check_collab_types.py` checks the lenient reading and that the
+committed document is current.
+
 ## Judging
 
 `astrocontrol/collab.py` holds the rules, and **both sides import it** — the

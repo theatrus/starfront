@@ -30,7 +30,6 @@ from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -39,6 +38,10 @@ from astrocontrol import collab, filters                         # noqa: E402
 from astrocontrol.config import data_root                        # noqa: E402
 from server import auth                                          # noqa: E402
 from server.store import Store                                   # noqa: E402
+from server import schemas as s                                  # noqa: E402
+from server.schemas import (                                     # noqa: E402
+    AgentRequest, HelloRequest, JoinRequest, ProjectRequest, ProjectUpdateRequest,
+    ReportRequest, TaskRequest, TaskStateRequest)
 
 app = FastAPI(title="Starfront collaboration server", version="0.1.0")
 
@@ -172,14 +175,14 @@ def _require_project_owner(who: dict[str, Any], project_id: str) -> dict[str, An
 # Signing in with Discord
 # ---------------------------------------------------------------------------
 
-@app.get("/api/v1/auth")
+@app.get("/api/v1/auth", response_model=s.AuthStatus, response_model_exclude_unset=True)
 def auth_status() -> dict[str, Any]:
     """Whether people can sign in here, and what it takes to start a project."""
     return {"discord": DISCORD.configured(), "guild": DISCORD.guild,
             "roleRequired": bool(DISCORD.role), "publicUrl": DISCORD.public_url}
 
 
-@app.post("/api/v1/auth/login")
+@app.post("/api/v1/auth/login", response_model=s.LoginStarted, response_model_exclude_unset=True)
 def auth_login() -> dict[str, Any]:
     """Begin a sign-in: a code for the program to hold and a page to open.
 
@@ -197,7 +200,7 @@ def auth_login() -> dict[str, Any]:
             "expiresIn": auth.LOGIN_CODE_SECONDS}
 
 
-@app.get("/auth/discord/start")
+@app.get("/auth/discord/start", response_class=HTMLResponse)
 def auth_start(code: str = Query(default="", max_length=64)):
     """The page Starfront opens: straight on to Discord."""
     if not DISCORD.configured():
@@ -213,7 +216,7 @@ def auth_start(code: str = Query(default="", max_length=64)):
     return RedirectResponse(discord.authorize_url(state=code))
 
 
-@app.get("/auth/discord/callback")
+@app.get("/auth/discord/callback", response_class=HTMLResponse)
 def auth_callback(code: str = Query(default=""), state: str = Query(default=""),
                   error: str = Query(default="")):
     """Discord sends the person back here. Check them, bind them to the code."""
@@ -245,7 +248,7 @@ def auth_callback(code: str = Query(default=""), state: str = Query(default=""),
         "Go back to Starfront - it has already noticed. " + starter))
 
 
-@app.get("/api/v1/auth/poll")
+@app.get("/api/v1/auth/poll", response_model=s.LoginPoll, response_model_exclude_unset=True)
 def auth_poll(code: str = Query(default="", max_length=64)) -> dict[str, Any]:
     """Has anybody signed in on this code yet? The token comes back once."""
     login = store.login(code)
@@ -268,13 +271,13 @@ def auth_poll(code: str = Query(default="", max_length=64)) -> dict[str, Any]:
                                             "roles": user["roles"]})}}
 
 
-@app.get("/api/v1/auth/me")
+@app.get("/api/v1/auth/me", response_model=s.Me, response_model_exclude_unset=True)
 def auth_me(who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     return {"id": who["id"], "name": who["name"], "admin": who["admin"],
             "canStart": may_start(who)}
 
 
-@app.post("/api/v1/auth/logout")
+@app.post("/api/v1/auth/logout", response_model=s.SignedOut, response_model_exclude_unset=True)
 def auth_logout(who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     if who["kind"] == "user":
         store.forget_user_token(who["id"])
@@ -284,17 +287,6 @@ def auth_logout(who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 # What arrives
 # ---------------------------------------------------------------------------
-
-class HelloRequest(BaseModel):
-    """An agent saying what it is, and what it can do."""
-
-    protocol: int = Field(default=collab.PROTOCOL)
-    profile: dict[str, Any] = Field(default_factory=dict)
-    #: Where the telescope is pointing and what it is doing, for the others
-    #: to see on their charts: {ra (hours), dec, state, target, project}.
-    #: Optional, and only what the rig chooses to say.
-    presence: dict[str, Any] | None = None
-
 
 #: How long since a check-in a telescope still counts as online. Rigs check
 #: in every ten minutes by default; twice that plus slack.
@@ -373,47 +365,11 @@ def _participants(project_id: str, now: float) -> dict[str, Any]:
             "participantNames": names}
 
 
-class TaskStateRequest(BaseModel):
-    state: str = Field(pattern="^(accepted|declined|complete)$")
-
-
-class ReportRequest(BaseModel):
-    """One night's work, one record per filter."""
-
-    contributions: list[dict[str, Any]] = Field(default_factory=list,
-                                                max_length=200)
-
-
-class AgentRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=80)
-    owner: str = Field(default="", max_length=80)
-
-
-class ProjectRequest(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
-    coordinator: str = Field(default="", max_length=80)
-    region: dict[str, Any]
-    # "single": one object, everybody points at it, nobody tiles it.
-    # "mosaic": a region to be covered, tiled by each rig with its own camera.
-    kind: str = Field(default="mosaic", pattern="^(single|mosaic)$")
-    requirements: dict[str, Any] = Field(default_factory=dict)
-    # Depth wanted at every point inside the region, per filter, in hours.
-    goals: dict[str, float] = Field(default_factory=dict)
-    notes: str = Field(default="", max_length=2000)
-
-
-class TaskRequest(BaseModel):
-    agent: str
-    region: dict[str, Any]
-    filters: list[dict[str, Any]] = Field(default_factory=list, max_length=20)
-    note: str = Field(default="", max_length=500)
-
-
 # ---------------------------------------------------------------------------
 # The agent's side: three calls, and that is the whole protocol
 # ---------------------------------------------------------------------------
 
-@app.post("/api/v1/agent/hello")
+@app.post("/api/v1/agent/hello", response_model=s.HelloResponse, response_model_exclude_unset=True)
 def hello(body: HelloRequest,
           agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Register a heartbeat and say what this rig is.
@@ -427,13 +383,14 @@ def hello(body: HelloRequest,
             status_code=409,
             detail=f"this server speaks protocol {collab.PROTOCOL}; the agent "
                    f"speaks {body.protocol} — update the server")
-    store.seen(agent["id"], body.profile or {},
-               body.presence if body.presence is not None else None)
+    store.seen(agent["id"], body.profile.model_dump(exclude_unset=True),
+               (body.presence.model_dump(exclude_unset=True)
+                if body.presence is not None else None))
     return {"agent": agent["id"], "name": agent["name"],
             "protocol": collab.PROTOCOL, "serverTime": time.time()}
 
 
-@app.get("/api/v1/presence")
+@app.get("/api/v1/presence", response_model=s.PresenceResponse, response_model_exclude_unset=True)
 def presence(agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Who is on the sky right now: every telescope that has checked in
     lately, where it points and what it is doing, for the chart and the
@@ -480,7 +437,7 @@ def _one_task_per_project(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return kept + list(newest.values())
 
 
-@app.get("/api/v1/agent/task")
+@app.get("/api/v1/agent/task", response_model=s.TaskResponse, response_model_exclude_unset=True)
 def current_task(agent: dict[str, Any] = Depends(agent_from),
                  night: str = Query(default="", max_length=16),
                  moon: float | None = Query(default=None, ge=0.0, le=1.0),
@@ -546,7 +503,7 @@ def current_task(agent: dict[str, Any] = Depends(agent_from),
     }
 
 
-@app.get("/api/v1/agent/projects/{project_id}/depth")
+@app.get("/api/v1/agent/projects/{project_id}/depth", response_model=s.DepthMap, response_model_exclude_unset=True)
 def project_depth(project_id: str,
                   agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """The depth map of a project: everybody's seconds on every cell of the
@@ -562,7 +519,7 @@ def project_depth(project_id: str,
             "progress": _progress(project_id, project.get("payload") or {})}
 
 
-@app.get("/api/v1/agent/projects")
+@app.get("/api/v1/agent/projects", response_model=s.OpenProjects, response_model_exclude_unset=True)
 def open_projects(agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Every project that is open, and whether this telescope can help.
 
@@ -712,29 +669,7 @@ def _collected(project_id: str) -> dict[str, float]:
     return hours
 
 
-class JoinRequest(BaseModel):
-    """Signing up for a share of a project."""
-
-    #: Hours this rig will give it per filter, capped by what the project wants.
-    #: Zero or missing takes the project's own goal.
-    hours: float = Field(default=0.0, ge=0.0, le=24.0)
-    #: Sub length, for a filter with no entry in `exposures`. Zero takes the
-    #: middle of what the project will accept.
-    exposure: float = Field(default=0.0, ge=0.0, le=3600.0)
-    #: The rig's own default sub length per filter - what its darks are
-    #: built for. The share is dealt at these, so every light can be
-    #: calibrated; a rig is assumed to have chosen them well.
-    exposures: dict[str, float] = Field(default_factory=dict)
-    #: Which night the rig is in and what its Moon is doing, so the first
-    #: deal is tonight's and made with the Moon in mind. A join that dealt
-    #: blind got one filter and the first poll another, under a running
-    #: sequence.
-    night: str = Field(default="", max_length=16)
-    moon: float | None = Field(default=None, ge=0.0, le=1.0)
-    moonUp: float | None = Field(default=None, ge=0.0, le=1.0)
-
-
-@app.post("/api/v1/agent/projects/{project_id}/join")
+@app.post("/api/v1/agent/projects/{project_id}/join", response_model=s.JoinResponse, response_model_exclude_unset=True)
 def join_project(project_id: str, body: JoinRequest,
                  agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Take a share of a project this telescope qualifies for.
@@ -1105,7 +1040,7 @@ def _middle_exposure(wants: collab.Requirements) -> float:
     return low or high or 300.0
 
 
-@app.post("/api/v1/agent/task/{task_id}")
+@app.post("/api/v1/agent/task/{task_id}", response_model=s.TaskEnvelope, response_model_exclude_unset=True)
 def set_task_state(task_id: str, body: TaskStateRequest,
                    agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Accept, decline or finish a task.
@@ -1123,7 +1058,7 @@ def set_task_state(task_id: str, body: TaskStateRequest,
     return {"task": task}
 
 
-@app.post("/api/v1/agent/report")
+@app.post("/api/v1/agent/report", response_model=s.ReportResponse, response_model_exclude_unset=True)
 def report(body: ReportRequest,
            agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
     """Hand back what was actually captured, and hear whether it counts.
@@ -1134,7 +1069,8 @@ def report(body: ReportRequest,
     """
     store.seen(agent["id"])
     results = []
-    for raw in body.contributions:
+    for item in body.contributions:
+        raw = item.model_dump(exclude_unset=True)
         entry = collab.Contribution.read({**raw, "agent": agent["id"]})
         task = store.task(entry.task) if entry.task else None
         if task is not None and task["agent"] != agent["id"]:
@@ -1158,7 +1094,7 @@ def report(body: ReportRequest,
 # The coordinator's side
 # ---------------------------------------------------------------------------
 
-@app.post("/api/v1/agents")
+@app.post("/api/v1/agents", response_model=s.AgentCreated, response_model_exclude_unset=True)
 def create_agent(body: AgentRequest,
                  who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     """Enrol a telescope and mint its token.
@@ -1175,7 +1111,7 @@ def create_agent(body: AgentRequest,
             "token": token}
 
 
-@app.get("/api/v1/agents")
+@app.get("/api/v1/agents", response_model=s.AgentList, response_model_exclude_unset=True)
 def list_agents(who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     """The owner sees every telescope; a member sees their own."""
     rows = store.agents() if who["admin"] else store.agents_of(who["id"])
@@ -1183,18 +1119,19 @@ def list_agents(who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
                        for agent in rows]}
 
 
-@app.post("/api/v1/projects")
+@app.post("/api/v1/projects", response_model=s.ProjectEnvelope, response_model_exclude_unset=True)
 def create_project(body: ProjectRequest,
                    who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     if not may_start(who):
         raise HTTPException(status_code=403,
                             detail="starting a collaboration on this server needs "
                                    "a Discord role you do not hold")
-    region = collab.Region.read(body.region)
+    region = collab.Region.read(body.region.model_dump(exclude_unset=True))
     payload = {
         "region": region.payload(),
         "kind": body.kind,
-        "requirements": collab.Requirements.read(body.requirements).payload(),
+        "requirements": collab.Requirements.read(
+            body.requirements.model_dump(exclude_unset=True)).payload(),
         "goals": _goals(body.goals),
         "notes": body.notes,
     }
@@ -1206,21 +1143,7 @@ def create_project(body: ProjectRequest,
     return {"project": project}
 
 
-class ProjectUpdateRequest(BaseModel):
-    """Changing a project after it was started. Every field is optional."""
-
-    name: str | None = Field(default=None, min_length=1, max_length=120)
-    region: dict[str, Any] | None = None
-    kind: str | None = Field(default=None, pattern="^(single|mosaic)$")
-    requirements: dict[str, Any] | None = None
-    goals: dict[str, float] | None = None
-    notes: str | None = Field(default=None, max_length=2000)
-    # open | closed. Closing takes it off everybody's list without deleting
-    # the record of what was collected.
-    status: str | None = Field(default=None, pattern="^(open|closed)$")
-
-
-@app.put("/api/v1/projects/{project_id}")
+@app.put("/api/v1/projects/{project_id}", response_model=s.ProjectEnvelope, response_model_exclude_unset=True)
 def update_project(project_id: str, body: ProjectUpdateRequest,
                    who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     """Change what a project asks for.
@@ -1237,11 +1160,12 @@ def update_project(project_id: str, body: ProjectUpdateRequest,
     project = _require_project_owner(who, project_id)
     payload = dict(project.get("payload") or {})
     if body.region is not None:
-        payload["region"] = collab.Region.read(body.region).payload()
+        payload["region"] = collab.Region.read(body.region.model_dump(exclude_unset=True)).payload()
     if body.kind is not None:
         payload["kind"] = body.kind
     if body.requirements is not None:
-        payload["requirements"] = collab.Requirements.read(body.requirements).payload()
+        payload["requirements"] = collab.Requirements.read(
+            body.requirements.model_dump(exclude_unset=True)).payload()
     if body.goals is not None:
         payload["goals"] = _goals(body.goals)
     if body.notes is not None:
@@ -1252,13 +1176,13 @@ def update_project(project_id: str, body: ProjectUpdateRequest,
     return {"project": updated}
 
 
-@app.get("/api/v1/projects")
+@app.get("/api/v1/projects", response_model=s.ProjectList, response_model_exclude_unset=True)
 def list_projects() -> dict[str, Any]:
     """Open to anyone: browsing is how people find a collab to join."""
     return {"projects": store.projects()}
 
 
-@app.get("/api/v1/projects/{project_id}")
+@app.get("/api/v1/projects/{project_id}", response_model=s.ProjectDetail, response_model_exclude_unset=True)
 def read_project(project_id: str) -> dict[str, Any]:
     project = store.project(project_id)
     if project is None:
@@ -1267,7 +1191,7 @@ def read_project(project_id: str) -> dict[str, Any]:
             "contributions": store.contributions(project_id)}
 
 
-@app.post("/api/v1/projects/{project_id}/tasks")
+@app.post("/api/v1/projects/{project_id}/tasks", response_model=s.TaskEnvelope, response_model_exclude_unset=True)
 def create_task(project_id: str, body: TaskRequest,
                 who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
     """Delegate a chunk of sky to one telescope."""
@@ -1277,13 +1201,14 @@ def create_task(project_id: str, body: TaskRequest,
 
     task = collab.Task(
         id=collab.new_id(), project=project_id, projectName=project["name"],
-        agent=body.agent, region=collab.Region.read(body.region),
-        filters=[collab.FilterTask.read(entry) for entry in body.filters],
+        agent=body.agent, region=collab.Region.read(body.region.model_dump(exclude_unset=True)),
+        filters=[collab.FilterTask.read(entry.model_dump(exclude_unset=True))
+                 for entry in body.filters],
         state="offered", version=1, issued=time.time(), note=body.note)
     return {"task": store.add_task(task.payload())}
 
 
-@app.post("/api/v1/contributions/{row_id}/verdict")
+@app.post("/api/v1/contributions/{row_id}/verdict", response_model=s.ContributionEnvelope, response_model_exclude_unset=True)
 def override_verdict(row_id: str, accepted: bool = Query(...),
                      reason: str = Query(default=""),
                      who: dict[str, Any] = Depends(person_from)) -> dict[str, Any]:
@@ -1310,14 +1235,17 @@ def override_verdict(row_id: str, accepted: bool = Query(...),
 # Everything else
 # ---------------------------------------------------------------------------
 
-@app.get("/api/v1/health")
+@app.get("/api/v1/health", response_model=s.Health, response_model_exclude_unset=True)
 def health() -> dict[str, Any]:
     return {"ok": True, "protocol": collab.PROTOCOL, "time": time.time(),
             # Which build is running, so an update can be checked from outside.
             "version": astrocontrol.__version__,
             "adminConfigured": bool(ADMIN_TOKEN),
             "discord": DISCORD.configured(),
-            "roleRequired": bool(DISCORD.role)}
+            "roleRequired": bool(DISCORD.role),
+            # The optional parts of the protocol this server offers, so a
+            # program need not probe for them.
+            "features": ["signin"] if DISCORD.configured() else []}
 
 
 @app.exception_handler(Exception)

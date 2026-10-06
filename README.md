@@ -1487,6 +1487,15 @@ Nothing starts on its own.  A task arrives **offered** and stays that way until
 somebody accepts it, and the server can go down without taking a night with it:
 it is a source of suggestions, never a dependency.
 
+### Looking back through the night
+
+The image viewer follows the camera: each frame that lands replaces the one
+on screen.  The **◀** and **▶** buttons on its toolbar, or the arrow keys,
+step back through the session's frames and forward again, and the counter
+between them says which of the night's frames is on screen.  While you are
+looking back a new frame does not snatch the view; **Newest**, or the End
+key, goes back to following the camera.
+
 ### Who is about
 
 Every check-in tells the server where the telescope is pointing and what it

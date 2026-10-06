@@ -1523,8 +1523,14 @@
     caption.className = 'small muted';
     wrap.appendChild(caption);
 
-    let grid = null;
-    let filter = '';
+    // What was fetched last time for this project, kept across re-renders of
+    // the plan: the grid and the survey picture. The plan redraws its boxes
+    // on every change of state, and a map that refetched and flashed
+    // "Fetching…" each time was unreadable.
+    const cached = depthCache.get(info.project) || {};
+    let grid = cached.grid || null;
+    let image = cached.image || null;
+    let filter = cached.filter || '';
     let hover = null;
 
     const target = entry.target || {};
@@ -1532,22 +1538,29 @@
     const panels = framingPanels(target);
     const field = { width: target.panelWidth || 0, height: target.panelHeight || 0 };
 
+    /** How wide a sky the picture shows: the region with a margin, in a
+     *  3:2 frame, the same shape the survey cutout is asked for. */
+    function fieldOfView() {
+      const region = grid.region;
+      const across = Math.max(0.5, Math.abs(region.width));
+      const down = Math.max(0.5, Math.abs(region.height));
+      return Math.min(60, Math.max(across, down * FRAME_W / FRAME_H) * 1.12);
+    }
+
     function geometry() {
       const region = grid.region;
       const ra0 = region.ra, dec0 = region.dec;
-      // The picture holds the region with a small margin; one scale in
-      // pixels per degree on both axes, north up, east left.
-      const across = Math.max(0.5, Math.abs(region.width)) * 1.12;
-      const down = Math.max(0.5, Math.abs(region.height)) * 1.12;
       const w = canvas.clientWidth || 600;
-      // Tall enough to show the field at its true shape, never taller than
-      // fits on a screen beside the rest of the box.
-      const h = Math.min(460, Math.round(w * Math.min(1.2, Math.max(0.45, down / across))));
+      const h = Math.round(w * FRAME_H / FRAME_W);
       const ratio = window.devicePixelRatio || 1;
-      canvas.width = Math.round(w * ratio);
-      canvas.height = Math.round(h * ratio);
-      canvas.style.height = `${h}px`;
-      const scale = Math.min(w / across, h / down);
+      if (canvas.width !== Math.round(w * ratio) || canvas.height !== Math.round(h * ratio)) {
+        canvas.width = Math.round(w * ratio);
+        canvas.height = Math.round(h * ratio);
+        canvas.style.height = `${h}px`;
+      }
+      // One scale in pixels per degree on both axes, north up, east left -
+      // the cutout's pixels are square and it is `fov` degrees wide.
+      const scale = w / fieldOfView();
       return {
         ra0, dec0, ratio, w, h, scale,
         toCanvas(ra, dec) {
@@ -1578,19 +1591,26 @@
       ctx.setTransform(g.ratio, 0, 0, g.ratio, 0, 0);
       ctx.fillStyle = '#05070d';
       ctx.fillRect(0, 0, g.w, g.h);
+      // The real sky underneath, so "what got shot" is read against the
+      // nebula it was shot for. The cutout is asked for at the canvas's own
+      // shape and field of view, so it lands pixel for pixel.
+      if (image) ctx.drawImage(image, 0, 0, g.w, g.h);
       const goal = Number((grid.goals || {})[filter] || 0) * 3600;
       const column = (grid.seconds || {})[filter] || [];
       // Each cell as a rectangle on the tangent plane: its centre projected,
       // its size in degrees of sky scaled, RA widened by the cosine already
-      // being sky degrees, so no further correction.
+      // being sky degrees, so no further correction. Translucent, so the sky
+      // shows through; a cell with nothing on it is left almost clear.
       grid.cells.forEach((cell, index) => {
         const centre = g.toCanvas(cell.ra, cell.dec);
         if (!centre) return;
         const cw = cell.width * g.scale, ch = cell.height * g.scale;
         const seconds = Number(column[index] || 0);
         const fraction = goal > 0 ? seconds / goal : (seconds > 0 ? 1 : 0);
+        ctx.globalAlpha = fraction > 0 ? 0.45 + 0.25 * Math.min(1, fraction) : 0.12;
         ctx.fillStyle = colour(fraction);
         ctx.fillRect(centre[0] - cw / 2, centre[1] - ch / 2, cw + 0.6, ch + 0.6);
+        ctx.globalAlpha = 1;
         if (hover === index) {
           ctx.strokeStyle = '#fff';
           ctx.lineWidth = 1.5;
@@ -1618,7 +1638,9 @@
           const centre = g.toCanvas(panel.ra, panel.dec);
           if (!centre) continue;
           const mine = share.has(panel.index);
-          const angle = ((panel.rotation || 0) - northAngle(g.ra0, g.dec0, panel.ra, panel.dec)) * DEG;
+          // The same correction the framing makes: north turns across the
+          // picture, and a camera at a fixed sky angle turns with it.
+          const angle = ((panel.rotation || 0) + northAngle(g.ra0, g.dec0, panel.ra, panel.dec)) * DEG;
           ctx.save();
           ctx.translate(centre[0], centre[1]);
           ctx.rotate(-angle);
@@ -1695,16 +1717,7 @@
     });
     canvas.addEventListener('mouseleave', () => { hover = null; draw(); });
 
-    wrap.show = async () => {
-      if (grid) { draw(); return; }
-      if (!info.project) { status.textContent = 'No collaboration behind this target.'; return; }
-      try {
-        grid = await app.api(`/api/collab/projects/${encodeURIComponent(info.project)}/depth`);
-      } catch (error) {
-        status.textContent = `The depth map could not be fetched: ${error.message}`;
-        return;
-      }
-      status.hidden = true;
+    function buttons() {
       const names = Object.keys(grid.seconds || {});
       bar.innerHTML = '';
       for (const name of names) {
@@ -1712,16 +1725,77 @@
         button.className = 'btn small ghost';
         button.dataset.filter = name;
         button.textContent = name;
-        button.addEventListener('click', () => pick(name));
+        button.addEventListener('click', () => {
+          pick(name);
+          depthCache.set(info.project, { ...(depthCache.get(info.project) || {}), filter: name });
+        });
         bar.appendChild(button);
       }
       if (!names.length) { status.hidden = false; status.textContent = 'Nothing has been contributed yet.'; }
-      // Start on the filter this telescope is shooting tonight, if it is one.
-      const tonight = (info.visit && info.visit.filter) || names[0] || '';
-      pick(names.includes(tonight) ? tonight : names[0] || '');
+      // Start on the filter this telescope is shooting tonight, if it is one,
+      // or the one that was being looked at before the plan redrew.
+      const tonight = (info.visit && info.visit.filter) || '';
+      const start = names.includes(filter) ? filter : (names.includes(tonight) ? tonight : names[0] || '');
+      pick(start);
+    }
+
+    async function fetchSky() {
+      // The survey cutout for the region, at the canvas's shape. Kept with
+      // the grid, so the plan redrawing does not fetch the sky again.
+      try {
+        const region = grid.region;
+        const url = `/api/survey/image?ra=${(region.ra / 15).toFixed(6)}`
+          + `&dec=${region.dec.toFixed(6)}&fov=${fieldOfView().toFixed(4)}`
+          + `&width=${FRAME_W}&height=${FRAME_H}`;
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const blob = await response.blob();
+        image = await new Promise((resolve, reject) => {
+          const element = new Image();
+          element.onload = () => resolve(element);
+          element.onerror = () => reject(new Error('the image could not be decoded'));
+          element.src = URL.createObjectURL(blob);
+        });
+        depthCache.set(info.project, { ...(depthCache.get(info.project) || {}), image });
+        draw();
+      } catch (error) {
+        // The map is the useful half; it is drawn over a dark sky instead.
+      }
+    }
+
+    wrap.show = async () => {
+      if (!info.project) { status.textContent = 'No collaboration behind this target.'; return; }
+      const stale = !cached.at || Date.now() - cached.at > DEPTH_REFRESH_MS;
+      if (grid) {
+        // Drawn at once from what was fetched before; refreshed quietly
+        // underneath when that is getting old.
+        status.hidden = true;
+        buttons();
+        if (!image) fetchSky();
+        if (!stale) return;
+      } else {
+        status.hidden = false;
+        status.textContent = 'Fetching the depth map…';
+      }
+      let fresh;
+      try {
+        fresh = await app.api(`/api/collab/projects/${encodeURIComponent(info.project)}/depth`);
+      } catch (error) {
+        if (!grid) status.textContent = `The depth map could not be fetched: ${error.message}`;
+        return;
+      }
+      grid = fresh;
+      depthCache.set(info.project, { ...(depthCache.get(info.project) || {}), grid, at: Date.now() });
+      status.hidden = true;
+      buttons();
+      if (!image) fetchSky();
     };
     return wrap;
   }
+
+  /** Depth maps and their sky pictures by project, across re-renders. */
+  const depthCache = new Map();
+  const DEPTH_REFRESH_MS = 60 * 1000;
 
   /* ------------------------------------------------------- the framing */
 

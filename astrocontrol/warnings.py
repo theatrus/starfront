@@ -41,6 +41,11 @@ INTERVAL = 15.0
 #: not again for this long even if it clears and comes back.
 NOTIFY_AGAIN_SECONDS = 3600.0
 
+#: How long a cooler gets to pull the sensor down before anything is said
+#: about the gap to its setpoint. When the gap was first seen, per camera.
+COOLING_GRACE_MINUTES = 5.0
+_COOLING_SEEN: dict[int, float] = {}
+
 
 @dataclass
 class Warning:
@@ -417,18 +422,29 @@ def camera_cooling(board: WarningBoard, ctx: Context) -> None:
         return
     with contextlib.suppress(Exception):
         if not camera.cooler_on:
+            _COOLING_SEEN.pop(id(camera), None)
             return
         setpoint = _num(camera.setpoint)
         temperature = _num(camera.temperature)
         if setpoint is None or temperature is None:
             return
+        if temperature - setpoint <= float(ctx.setting("camera", "coolToleranceC", 1.0) or 1.0) + 2.0:
+            _COOLING_SEEN.pop(id(camera), None)
         tolerance = float(ctx.setting("camera", "coolToleranceC", 1.0) or 1.0)
         gap = temperature - setpoint
         power = _num(getattr(camera, "cooler_power", None))
         if gap > tolerance + 2.0:
             minutes = float(ctx.setting("warnings", "coolingMinutes", 15.0) or 15.0)
             key = "camera.cooling"
-            waited = board.age(key) / 60.0
+            # Cooling takes a while by nature: a sensor at room temperature
+            # needs five or ten minutes to get to minus five, and saying so
+            # while it is doing exactly that is noise. The clock starts when
+            # the gap is first seen, and nothing is said until it has run a
+            # while; then a notice, then a warning when it has gone on too long.
+            seen = _COOLING_SEEN.setdefault(id(camera), time.time())
+            waited = (time.time() - seen) / 60.0
+            if waited < COOLING_GRACE_MINUTES:
+                return
             hard = power is not None and power >= 95.0 and waited >= minutes
             level = "warning" if hard or waited >= minutes else "notice"
             board.raise_(key, level,
@@ -449,16 +465,25 @@ def camera_darks_match(board: WarningBoard, ctx: Context) -> None:
     if str(ctx.setting("calibration", "applyTo", "survey") or "off").lower() == "off":
         return
     with contextlib.suppress(Exception):
+        # A cooled camera whose cooler is off has not been told what tonight's
+        # temperature is yet, so there is nothing to match the darks against
+        # until the sequence is actually exposing at whatever it is. Judging
+        # the library against room temperature at dusk only ever says "no".
+        camera = ctx.device("camera")
+        if (camera is not None and getattr(camera, "can_cool", False)
+                and not camera.cooler_on and not ctx.imaging()):
+            return
         found = ctx.coverage()
         rows = found.get("rows") or []
         dark_missing = [r for r in rows if r["kind"] == "dark" and r["state"] != "ok"]
         if dark_missing and rows:
-            what = "; ".join(f"{r['label']}: {r['state']}" for r in dark_missing[:3])
+            what = "; ".join(f"{r['label']}: {r.get('detail') or r['state']}"
+                             for r in dark_missing[:3])
             board.raise_("library.darks", "warning",
                          "Tonight's frames have no matching dark",
                          f"{what}. Frames will be filed uncalibrated.",
-                         "Shoot the darks on the Calibrate tab, or check the camera's "
-                         "temperature against the library's.")
+                         "Shoot the darks on the Calibrate tab, or set the cooler to the "
+                         "temperature the darks were shot at.")
 
 
 @check

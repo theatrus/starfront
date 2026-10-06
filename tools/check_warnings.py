@@ -196,15 +196,43 @@ trip("a plan of only calibration needs no mount",
      absent="mount.missing")
 
 # The cooler.
-b, found, r, dog = trip("a camera off its setpoint is a notice at first",
-                        devices={"camera": camera(temperature=-2.0), "mount": mount()},
-                        expect="camera.cooling")
-case("...a notice, not yet a warning", found["camera.cooling"]["level"] == "notice")
-b._active["camera.cooling"].since -= 20 * 60
-r.manager.devices["camera"].cooler_power = 99.0
+b, found, r, dog = trip("a camera that has just started cooling is left alone",
+                        devices={"camera": camera(temperature=22.0), "mount": mount()},
+                        absent="camera.cooling")
+cam = r.manager.devices["camera"]
+warnings._COOLING_SEEN[id(cam)] -= 6 * 60
+dog.pass_once()
+case("...after the grace period it is a notice", keys(b)["camera.cooling"]["level"] == "notice")
+warnings._COOLING_SEEN[id(cam)] -= 20 * 60
+cam.cooler_power = 99.0
 dog.pass_once()
 case("...and after fifteen minutes at full power it is a warning that says so",
      keys(b)["camera.cooling"]["level"] == "warning" and "cannot" in keys(b)["camera.cooling"]["title"])
+cam.temperature = -10.0
+dog.pass_once()
+case("...which clears, and forgets the clock, once it gets there",
+     "camera.cooling" not in keys(b) and id(cam) not in warnings._COOLING_SEEN)
+
+# The darks against the temperature.
+missing_dark = {"rows": [{"kind": "bias", "label": "bias", "state": "ok"},
+                         {"kind": "dark", "label": "dark 300s (L)", "state": "missing",
+                          "detail": "the nearest master dark is at -5 C and this frame is at 25 C"}],
+                "state": "missing"}
+b, ctx_, dog, r = build(devices={"camera": camera(cooler_on=False, temperature=25.0), "mount": mount()})
+ctx_.coverage = lambda: missing_dark
+dog.pass_once()
+case("a cooled camera with its cooler off says nothing about the darks yet",
+     "library.darks" not in keys(b))
+r.manager.devices["camera"].cooler_on = True
+dog.pass_once()
+found = keys(b)
+case("...once the cooler is on, the darks are judged, and the reason is in the text",
+     "library.darks" in found and "nearest master dark" in found["library.darks"]["detail"])
+r.manager.devices["camera"].cooler_on = False
+ctx_.sequencer.state.update({"running": True, "state": "imaging"})
+dog.pass_once()
+case("...and an uncooled camera that is actually exposing is judged as it is",
+     "library.darks" in keys(b))
 
 # Tracking off while imaging.
 trip("tracking off during a light frame is critical",

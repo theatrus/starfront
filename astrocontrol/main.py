@@ -5290,6 +5290,37 @@ def get_library() -> dict[str, Any]:
     return _guard(library.summary)
 
 
+def _night_temperature(target, camera_settings: dict[str, Any]) -> float | None:
+    """The sensor temperature tonight's frames will be taken at.
+
+    A cooler that is on is heading for its setpoint, so the setpoint is the
+    answer even while the sensor is still twenty degrees above it - a camera
+    plugged in at dusk reads room temperature for ten minutes, and the darks
+    at minus five are not "missing" for those ten minutes. With the cooler
+    off, the sequence's own cooling setting decides; and a camera that is
+    neither cooling nor going to be shot at whatever it is.
+    """
+    camera = target.manager.get("camera")
+    connected = camera is not None and camera.connected
+    if connected and getattr(camera, "can_cool", False):
+        with contextlib.suppress(Exception):
+            if camera.cooler_on and camera.setpoint is not None:
+                return float(camera.setpoint)
+    elif connected:
+        # No cooler at all: the setpoint settings mean nothing to it.
+        with contextlib.suppress(Exception):
+            value = camera.temperature
+            return None if value is None else float(value)
+    if camera_settings.get("coolAtStart", True):
+        value = camera_settings.get("setpoint")
+        return None if value is None else float(value)
+    if connected:
+        with contextlib.suppress(Exception):
+            value = camera.temperature
+            return None if value is None else float(value)
+    return None
+
+
 def _calibration_needs(target) -> list[dict[str, Any]]:
     """What tonight will ask of the library, for one telescope.
 
@@ -5303,9 +5334,7 @@ def _calibration_needs(target) -> list[dict[str, Any]]:
     connected = camera is not None and camera.connected
     gain = camera.gain if connected else camera_settings.get("gain")
     offset = camera.offset if connected else camera_settings.get("offset")
-    temperature = (camera_settings.get("setpoint")
-                   if camera_settings.get("coolAtStart", True)
-                   else (camera.temperature if connected else None))
+    temperature = _night_temperature(target, camera_settings)
     binning = int(camera_settings.get("binning", 1) or 1)
     base = {
         "binning": binning,

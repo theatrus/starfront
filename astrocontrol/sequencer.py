@@ -1741,7 +1741,7 @@ class Sequencer:
                 rig.capture.calibration_context = (
                     "survey" if target.get("type") == "survey" else "light")
 
-            self._goto(panel, label)
+            self._goto(panel, label, rotate=self._rotate_for(entry, target))
             if position == 1 and not reframed:
                 self._check_camera_angle(entry, target, panel)
             # Checked again after the slew: a slew across the sky plus a centre
@@ -1920,9 +1920,32 @@ class Sequencer:
         except Exception as exc:                  # noqa: BLE001 - the slew will say
             self._say(f"Could not switch tracking on: {exc}", "warn")
 
-    def _goto(self, panel: dict[str, Any], label: str) -> None:
-        """Point the mount.  The slaves are bolted to it and come along."""
+    def _rotate_for(self, entry: dict[str, Any] | None, target: dict[str, Any] | None) -> bool:
+        """Whether this entry's panels may turn the rotator.
+
+        A collaboration chunk joined with "turn the rotator to the project's
+        angle" switched off was laid at the camera's own angle precisely so
+        that the rotator stays where it is - and then every slew turned it
+        anyway, to the angle the panels were laid at, which the rotator's
+        own calibration put somewhere else. Everything else may turn.
+        """
+        if not entry or not target or not (target.get("collab") or {}).get("task"):
+            return True
+        return bool(plans.options_for(entry).get("collabMatchRotation", True))
+
+    def _goto(self, panel: dict[str, Any], label: str, rotate: bool = True) -> None:
+        """Point the mount.  The slaves are bolted to it and come along.
+
+        Guiding stops first: a guider still pulsing the mount through a slew
+        and a centring has lost its star, and its corrections fight the sync
+        and the nudges. `_run_entry` starts it again once the panel is
+        centred and focused.
+        """
         self._home_mount()
+        guider = self.manager.get("guider")
+        if guider is not None and guider.connected and guider.guiding:
+            self._say("Stopping guiding for the slew and the centring")
+            self._stop_guiding()
         self._set("slewing", f"slewing to {label}")
         self._say(f"Slewing to {label}")
         started = time.monotonic()
@@ -1931,10 +1954,16 @@ class Sequencer:
 
         rotator = self.manager.get("rotator")
         rotation = panel.get("rotation")
-        rotating = (rotation is not None and rotator is not None
+        rotating = (rotate and rotation is not None and rotator is not None
                     and rotator.connected)
         if rotating:
+            with contextlib.suppress(Exception):
+                self._say(f"Rotator: {float(rotator.position):.1f}° -> {float(rotation):.1f}° "
+                          f"for {label}")
             rotator.move_absolute(float(rotation))
+        elif rotation is not None and rotator is not None and rotator.connected:
+            self._say(f"Rotator left where it is ({float(rotator.position):.1f}°): "
+                      "this collaboration is shot at the camera's own angle")
 
         mount.slew_to(astro.normalise_ra_hours(panel["ra"]), float(panel["dec"]))
         self._wait_for_mount(mount)

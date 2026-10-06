@@ -487,8 +487,9 @@ class Solver:
 
         target = (float(rotator.position) + error) % 360.0
         self._set("rotating", f"{error:+.2f}° out — turning the rotator")
-        self.manager.log(f"Framing angle is {error:+.2f}° out; "
-                         f"rotator {rotator.position:.2f}° -> {target:.2f}°")
+        self.manager.log(f"Framing angle measured {float(measured):.2f}°, wanted "
+                         f"{float(wanted):.2f}°: {error:+.2f}° out; turning the rotator "
+                         f"by {error:+.2f}° from {float(rotator.position):.2f}° to {target:.2f}°")
         try:
             rotator.move_absolute(target)
         except DeviceError as exc:
@@ -552,6 +553,19 @@ class Solver:
             self._report(result)
 
             centred = result.separation <= tolerance
+            # Where it landed against where it was sent, in arcminutes on the
+            # sky and split into the two axes, so a centring that is not
+            # converging can be read for what is wrong - a mount off in RA
+            # only is a different fault from one off in both.
+            east = (((result.ra - target_ra + 12.0) % 24.0) - 12.0) * 15.0 * 60.0 \
+                * math.cos(math.radians(target_dec))
+            north = (result.dec - target_dec) * 60.0
+            self.manager.log(
+                f"Centre attempt {attempt}/{attempts}: {result.separation:.2f}' off "
+                f"(RA {east:+.2f}', Dec {north:+.2f}')"
+                + (f"; angle {result.rotation:.2f}° against {float(rotation):.2f}° wanted"
+                   if rotation is not None else "")
+                + (" - within tolerance" if centred else f" - tolerance {tolerance:g}'"))
 
             # Centre and rotate: the same solve that says where the telescope is
             # pointing also says which way up it is, so correcting both from one
@@ -593,6 +607,8 @@ class Solver:
                         self.manager.log(f"The mount would not sync ({exc}); nudging "
                                          "the slew by the measured error instead", "warn")
                 if synced:
+                    self.manager.log("Synced the mount to the solve; slewing to the "
+                                     "target again")
                     mount.slew_to(target_ra, target_dec)
                 else:
                     # The error is known, so the slew is nudged by it: ask for
@@ -602,6 +618,8 @@ class Solver:
                     # the mount steadily away from the field.
                     aim_ra = astro.normalise_ra_hours(target_ra + (target_ra - result.ra))
                     aim_dec = max(-90.0, min(90.0, target_dec + (target_dec - result.dec)))
+                    self.manager.log(f"Nudging the slew by RA {-east:+.2f}', Dec {-north:+.2f}' "
+                                     f"to RA {aim_ra:.5f}h  Dec {aim_dec:+.4f}°")
                     mount.slew_to(aim_ra, aim_dec)
                 self._wait_for_slew(mount)
 

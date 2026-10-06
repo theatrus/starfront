@@ -391,6 +391,60 @@ results.append(case("a slew with a solver present centres without a rotator",
                     why or f"slews={mount.slews}, solver={solver.calls}"))
 
 
+# 14b. A rotator is turned to the panel's angle - unless the entry is a
+# collaboration joined with "turn the rotator to the project's angle" off,
+# in which case it stays exactly where it is and the solve is not asked to
+# correct the angle either. And guiding stops before the slew: a guider
+# pulsing the mount through a slew and a centring fights every correction.
+class TurningRotator:
+    def __init__(self):
+        self.connected = True
+        self.position = 120.0
+        self.moving = False
+        self.moves = []
+
+    def move_absolute(self, angle):
+        self.moves.append(round(angle, 2))
+        self.position = angle
+
+
+def goto_case(rotate, guiding):
+    mount = Mount()
+    rotator = TurningRotator()
+    guider = Guider()
+    guider.state = "Guiding" if guiding else "Stopped"
+    seq, rig, config = build({"mount": mount, "rotator": rotator, "guider": guider})
+    solver = SolvingSolver()
+    rig.solver = solver
+    seq.rigs.master.solver = solver
+    config.update("sequencer", {"settleSeconds": 0.0, "homeAtStart": False})
+    seq._goto({"index": 1, "ra": 0.712, "dec": 41.27, "rotation": 35.0}, "M31", rotate=rotate)
+    return rotator, solver, guider
+
+
+rotator, solver, guider = goto_case(rotate=True, guiding=True)
+results.append(case("a rotator is turned to the panel's angle and the solve holds it",
+                    rotator.moves == [35.0] and solver.calls[0][3] == 35.0,
+                    f"moves={rotator.moves}, solver={solver.calls}"))
+results.append(case("...and a guider that was guiding is stopped before the slew",
+                    guider.stopped == 1 and not guider.guiding, f"stopped {guider.stopped}"))
+rotator, solver, guider = goto_case(rotate=False, guiding=False)
+results.append(case("a collaboration shot at the camera's own angle leaves the rotator alone",
+                    rotator.moves == [] and rotator.position == 120.0
+                    and solver.calls[0][3] is None,
+                    f"moves={rotator.moves}, solver={solver.calls}"))
+results.append(case("...and a guider that was not guiding is not stopped",
+                    guider.stopped == 0))
+seq, rig, config = build({"mount": Mount()})
+own_entry = {"id": "e", "name": "Mine", "targetId": "t"}
+collab_off = {"id": "e2", "name": "Theirs", "targetId": "t2", "options": {"collabMatchRotation": False}}
+collab_on = {"id": "e3", "name": "Theirs too", "targetId": "t3"}
+results.append(case("the rotator rule: your own targets turn, a collaboration turns only when asked",
+                    seq._rotate_for(own_entry, {"id": "t"}) is True
+                    and seq._rotate_for(collab_off, {"id": "t2", "collab": {"task": "x"}}) is False
+                    and seq._rotate_for(collab_on, {"id": "t3", "collab": {"task": "y"}}) is True))
+
+
 # 15. The camera on a rig with no rotator is where the panels assume it is,
 # or it is not. The first plate solve of a collaboration measures it; a
 # disagreement beyond the tolerance lays the mosaic out again through the

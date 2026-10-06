@@ -116,6 +116,12 @@ case("...by one nudge of exactly the measured error, from the target",
      str(mount.slews))
 case("...and the sync is not asked for again once refused",
      sum(1 for level, m in solver.manager.logged if "would not sync" in m) == 1)
+attempts_logged = [m for _, m in solver.manager.logged if m.startswith("Centre attempt")]
+case("...every attempt says how far off it landed, split into RA and Dec",
+     len(attempts_logged) == 2 and "RA " in attempts_logged[0] and "Dec " in attempts_logged[0]
+     and "within tolerance" in attempts_logged[1], str(attempts_logged))
+case("...and the nudge says how far it moved the aim",
+     any(m.startswith("Nudging the slew by") for _, m in solver.manager.logged))
 case("...landing within tolerance",
      abs(mount.ra - TARGET[0]) < 1e-6 and abs(mount.dec - TARGET[1]) < 1e-6,
      f"{mount.ra:.5f}h {mount.dec:.4f}")

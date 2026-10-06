@@ -1305,6 +1305,17 @@ case("everybody can see who is on the sky",
      and abs(me["ra"] - 5.5883) < 1e-6 and me["target"] == "M42" and me["state"] == "imaging",
      str(me))
 case("...and how many telescopes are online", who.get("online", 0) >= 2, str(who.get("online")))
+# The owner's Discord picture and name travel with the telescope, for the
+# chart. An agent enrolled by the owner's token has no signed-in person
+# behind it, so its picture is blank rather than a broken link.
+case("a telescope carries its owner's name and picture for the chart",
+     "avatar" in me and me["avatar"] == "" and "ownerName" in me, str(me))
+from server import app as _srv                                       # noqa: E402
+case("...a signed-in person's picture is a Discord CDN link",
+     _srv._avatar_url({"id": "1001", "avatar": "abc123"})
+     == "https://cdn.discordapp.com/avatars/1001/abc123.png?size=64"
+     and _srv._avatar_url({"id": "1001", "avatar": "a_moving"}).endswith("a_moving.gif?size=64")
+     and _srv._avatar_url({"id": "1001", "avatar": ""}) == "")
 status, listing = call("GET", "/api/v1/agent/projects", token=LONG_TOKEN)
 strict_card = next((p for p in listing["projects"] if p["id"] == STRICT), {})
 case("a project says how many telescopes are on it",

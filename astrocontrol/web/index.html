@@ -8,7 +8,7 @@
 <!-- The ?v= stamps exist to break a browser cache that has already decided an
      older copy is still fresh. Bump them if a released build ever needs to
      invalidate a client that has not revalidated. -->
-<link rel="stylesheet" href="style.css?v=53">
+<link rel="stylesheet" href="style.css?v=54">
 </head>
 <body>
 
@@ -375,6 +375,14 @@
       <div class="viewer-toolbar">
         <span class="viewer-title" id="viewerTitle">No image</span>
         <span class="spacer"></span>
+        <!-- Step back through the frames of the session and forward again.
+             While you are looking back, a new frame landing does not snatch
+             the view; Newest takes you back to following the camera. -->
+        <button class="btn small" id="btnPrevFrame" title="Previous frame (←)">◀</button>
+        <span class="mono small viewer-pos" id="viewerPos" title="Which frame of the session this is"></span>
+        <button class="btn small" id="btnNextFrame" title="Next frame (→)">▶</button>
+        <button class="btn small ghost" id="btnNewestFrame" title="Back to the latest frame, and follow new ones" hidden>Newest</button>
+        <span class="toolbar-gap"></span>
         <button class="btn small" id="btnFit">Fit</button>
         <button class="btn small" id="btnActual">1:1</button>
         <button class="btn small" id="btnZoomOut">−</button>
@@ -2958,14 +2966,14 @@
 
 <div id="toasts" class="toasts"></div>
 
-<script src="app.js?v=53"></script>
-<script src="sky.js?v=53"></script>
-<script src="planner.js?v=53"></script>
-<script src="plan.js?v=53"></script>
-<script src="surveytab.js?v=53"></script>
-<script src="calibrate.js?v=53"></script>
-<script src="collab.js?v=53"></script>
-<script src="allsky.js?v=53"></script>
-<script src="wizard.js?v=53"></script>
+<script src="app.js?v=54"></script>
+<script src="sky.js?v=54"></script>
+<script src="planner.js?v=54"></script>
+<script src="plan.js?v=54"></script>
+<script src="surveytab.js?v=54"></script>
+<script src="calibrate.js?v=54"></script>
+<script src="collab.js?v=54"></script>
+<script src="allsky.js?v=54"></script>
+<script src="wizard.js?v=54"></script>
 </body>
 </html>

@@ -595,6 +595,9 @@ table.survey-fields tr:hover td { background: var(--panel-2); }
   font-family: var(--mono); font-size: 12px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 46%;
 }
+.viewer-pos { min-width: 52px; text-align: center; color: var(--muted); }
+.viewer-pos:empty { display: none; }
+.toolbar-gap { width: 6px; }
 
 .canvas-wrap {
   position: relative;

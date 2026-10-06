@@ -300,16 +300,38 @@ class HelloRequest(BaseModel):
 ONLINE_SECONDS = 25 * 60
 
 
+def _avatar_url(user: dict[str, Any] | None) -> str:
+    """The Discord profile picture of a signed-in person, as a CDN link.
+
+    Discord keeps the picture itself; the sign-in told us the hash. The link
+    is public, is what Discord's own clients fetch, and sends the headers a
+    browser canvas needs to draw it. Somebody without a picture gets "".
+    """
+    if not user:
+        return ""
+    user_id = str(user.get("id") or "")
+    avatar = str(user.get("avatar") or "")
+    if not user_id or not avatar:
+        return ""
+    kind = "gif" if avatar.startswith("a_") else "png"
+    return f"https://cdn.discordapp.com/avatars/{user_id}/{avatar}.{kind}?size=64"
+
+
 def _presence_of(agent: dict[str, Any], now: float) -> dict[str, Any]:
     """One telescope as the group sees it."""
     said = agent.get("presence") or {}
     age = max(0.0, now - float(agent.get("seen") or 0.0))
     ra = _number_or_none(said.get("ra"))
     dec = _number_or_none(said.get("dec"))
+    person = store.user(str(agent.get("owner_id") or "")) if agent.get("owner_id") else None
     return {
         "id": agent["id"],
         "name": agent.get("name") or "",
         "owner": agent.get("owner") or "",
+        # Who the telescope belongs to, as Discord shows them: their current
+        # name and their picture, for the chart.
+        "ownerName": (person or {}).get("name") or agent.get("owner") or "",
+        "avatar": _avatar_url(person),
         "ra": ra, "dec": dec,
         "state": str(said.get("state") or ""),
         "target": str(said.get("target") or "")[:80],

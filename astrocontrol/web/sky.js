@@ -909,6 +909,25 @@
   /** The other telescopes in the collaboration, where they last said they
    *  were pointing. A small ringed dot with the telescope's name and what it
    *  is on; dimmed once its last check-in is old. */
+  /* Discord profile pictures for the other telescopes, fetched once each.
+     Drawn with CORS so the canvas stays readable - the Milky Way sampling
+     reads pixels back, and one tainted draw would break that. A picture
+     that fails to load, or has not arrived yet, leaves the plain dot. */
+  const avatars = new Map();                       // url -> Image | null
+  const AVATAR_RADIUS = 11;
+
+  function avatarFor(url) {
+    if (!url) return null;
+    if (avatars.has(url)) return avatars.get(url);
+    avatars.set(url, null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => { avatars.set(url, img); draw(); };
+    img.onerror = () => avatars.set(url, null);
+    img.src = url;
+    return null;
+  }
+
   function drawOthers() {
     const ctx = sky.ctx;
     for (const other of sky.others) {
@@ -917,6 +936,7 @@
       const [x, y] = point;
       if (x < -30 || x > sky.width + 30 || y < -30 || y > sky.height + 30) continue;
       const fresh = other.online;
+      const picture = avatarFor(other.avatar);
       ctx.save();
       ctx.globalAlpha = fresh ? 0.95 : 0.45;
       ctx.strokeStyle = '#7ee7a5';
@@ -924,12 +944,28 @@
       ctx.lineWidth = 1.2;
       ctx.shadowColor = 'rgba(0, 0, 8, 0.9)';
       ctx.shadowBlur = 3;
-      ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
-      ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 0;
+      let labelX = x + 11;
+      if (picture) {
+        // The person's picture in a mint ring, with a small dot at the exact
+        // pointing so the ring's size does not read as a field of view.
+        ctx.beginPath(); ctx.arc(x, y, AVATAR_RADIUS + 1.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.save();
+        ctx.beginPath(); ctx.arc(x, y, AVATAR_RADIUS, 0, Math.PI * 2); ctx.clip();
+        ctx.drawImage(picture, x - AVATAR_RADIUS, y - AVATAR_RADIUS,
+          AVATAR_RADIUS * 2, AVATAR_RADIUS * 2);
+        ctx.restore();
+        labelX = x + AVATAR_RADIUS + 6;
+      } else {
+        ctx.beginPath(); ctx.arc(x, y, 7, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+      const who = other.ownerName && other.ownerName !== other.name
+        ? ` · ${other.ownerName}` : '';
       const what = other.target ? ` — ${other.target}` : (other.state ? ` (${other.state})` : '');
       const age = other.ageSeconds >= 60 ? `, ${Math.round(other.ageSeconds / 60)} min ago` : '';
-      placeLabel(`${other.name}${what}${fresh ? '' : age}`, x + 11, y + 4,
+      placeLabel(`${other.name}${who}${what}${fresh ? '' : age}`, labelX, y + 4,
         fresh ? 'rgba(190, 240, 210, 0.9)' : 'rgba(160, 180, 170, 0.7)', LABEL_FONT_SMALL);
       ctx.restore();
     }
@@ -1518,7 +1554,7 @@
       .filter((t) => t.id !== mine && t.ra !== null && t.ra !== undefined
         && t.dec !== null && t.dec !== undefined)
       .map((t) => ({ ...t, ra: raDegrees(t.ra) }));
-    const othersKey = JSON.stringify(others.map((t) => [t.id, t.ra, t.dec, t.online, t.target]));
+    const othersKey = JSON.stringify(others.map((t) => [t.id, t.ra, t.dec, t.online, t.target, t.avatar, t.ownerName]));
     const othersMoved = othersKey !== sky.othersKey;
     sky.others = others;
     sky.othersKey = othersKey;

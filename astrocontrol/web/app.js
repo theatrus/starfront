@@ -1902,7 +1902,13 @@ function applyStatus(status) {
   const mine = !!latest && latest !== state.lastLatestId;
   if (mine) state.lastLatestId = latest;
   if (mine || anyNew) {
-    refreshImages().then(() => { if (mine) selectImage(latest, true); });
+    // A new frame is pulled into the view only while the viewer is following
+    // the camera. Somebody stepping back through the night's frames keeps
+    // the one they are on; Newest brings them back.
+    refreshImages().then(() => {
+      if (mine && !state.browsing) selectImage(latest, true);
+      else updateFramePosition();
+    });
   }
 
   // The tab is part of the payload, not an extra that only `showTab` supplies.
@@ -3721,6 +3727,8 @@ async function refreshImages() {
     }
   } catch (error) {
     console.error(error);
+  } finally {
+    updateFramePosition();
   }
 }
 
@@ -3899,6 +3907,9 @@ function initViewer() {
   });
 
   $('btnFit').addEventListener('click', () => { fitView(); scheduleDetail(); });
+  $('btnPrevFrame').addEventListener('click', () => stepFrame(1));
+  $('btnNextFrame').addEventListener('click', () => stepFrame(-1));
+  $('btnNewestFrame').addEventListener('click', newestFrame);
   $('btnActual').addEventListener('click', () => { setZoom(1); });
   $('btnZoomIn').addEventListener('click', () => zoomAt(centreX(), centreY(), 1.35));
   $('btnZoomOut').addEventListener('click', () => zoomAt(centreX(), centreY(), 1 / 1.35));
@@ -4048,6 +4059,49 @@ async function loadDetail() {
   img.src = url;
 }
 
+/* -------------------------------------------- stepping through the frames */
+
+/** Where the frame on view sits in the session: 0 is the newest. */
+function frameIndex() {
+  const images = state.images || [];
+  return images.findIndex((image) => image.id === state.currentId);
+}
+
+/** "3 / 41" on the toolbar, and whether the viewer is following the camera. */
+function updateFramePosition() {
+  const images = state.images || [];
+  const index = frameIndex();
+  const label = $('viewerPos');
+  if (!label) return;
+  if (!images.length || index < 0) {
+    label.textContent = '';
+    state.browsing = false;
+  } else {
+    label.textContent = `${images.length - index} / ${images.length}`;
+    state.browsing = index > 0;
+  }
+  $('btnPrevFrame').disabled = index < 0 || index >= images.length - 1;
+  $('btnNextFrame').disabled = index <= 0;
+  $('btnNewestFrame').hidden = !state.browsing;
+}
+
+/** Step back (delta +1) or forward (delta -1) through the session's frames. */
+function stepFrame(delta) {
+  const images = state.images || [];
+  if (!images.length) return;
+  const index = frameIndex();
+  const next = index < 0 ? 0 : Math.max(0, Math.min(images.length - 1, index + delta));
+  if (next === index) return;
+  selectImage(images[next].id, true);
+}
+
+function newestFrame() {
+  const images = state.images || [];
+  if (!images.length) return;
+  state.browsing = false;
+  selectImage(images[0].id, true);
+}
+
 async function selectImage(imageId, keepView = false) {
   if (!imageId) return;
   let payload;
@@ -4070,6 +4124,7 @@ async function selectImage(imageId, keepView = false) {
     row.classList.toggle('active', row.dataset.imageId === imageId);
   });
   setText('viewerTitle', record.filename + (record.saved ? '' : '   (not saved)'));
+  updateFramePosition();
   const download = $('btnDownload');
   download.href = record.saved ? `/api/images/${imageId}/download` : '#';
   download.classList.toggle('disabled', !record.saved);
@@ -4704,6 +4759,9 @@ function bindControls() {
     if (state.tab !== 'image') return;
     if (event.key === 'f') { fitView(); scheduleDetail(); }
     if (event.key === '1') setZoom(1);
+    if (event.key === 'ArrowLeft') { event.preventDefault(); stepFrame(1); }
+    if (event.key === 'ArrowRight') { event.preventDefault(); stepFrame(-1); }
+    if (event.key === 'End') { event.preventDefault(); newestFrame(); }
     if (event.key === ' ') { event.preventDefault(); $('btnCapture').click(); }
   });
 }

@@ -1801,6 +1801,16 @@
     ];
   }
 
+  /** The inverse: a tangent-plane offset at (ra0, dec0), back on the sky. */
+  function offsetToSky(ra0, dec0, east, north) {
+    const r0 = ra0 * DEG, d0 = dec0 * DEG;
+    const xi = east * DEG, eta = north * DEG;
+    const denominator = Math.cos(d0) - eta * Math.sin(d0);
+    const ra = r0 + Math.atan2(xi, denominator);
+    const dec = Math.atan2(Math.sin(d0) + eta * Math.cos(d0), Math.hypot(xi, denominator));
+    return [((ra / DEG) % 360 + 360) % 360, dec / DEG];
+  }
+
   /** Which way north points at (ra, dec) in the tangent plane at (ra0, dec0). */
   function northAngle(ra0, dec0, ra, dec) {
     const epsilon = dec + 1e-4 <= 90 ? 1e-4 : -1e-4;
@@ -2203,14 +2213,14 @@
       // axes and circumscribes it, so on a turned camera the two differ a lot.
       const outline = picking && picking.outline;
       if (outline && outline.width > 0 && outline.height > 0) {
-        const at = project(outline.ra, outline.dec);
-        if (at) {
-          const angle = -northAngle(centre.ra, centre.dec, outline.ra, outline.dec) * DEG;
-          const hw = outline.width / 2 * scale;
-          const hh = outline.height / 2 * scale;
-          const cos = Math.cos(angle), sin = Math.sin(angle);
-          const corner = (dx, dy) => [at[0] + dx * cos - dy * sin, at[1] + dx * sin + dy * cos];
-          const box = [corner(-hw, -hh), corner(hw, -hh), corner(hw, hh), corner(-hw, hh)];
+        // From its corners on the sky, each projected onto this picture -
+        // the same four points the Planner drew and the server tiles, so
+        // the dashed box here is the box that was drawn there.
+        const hw = outline.width / 2, hh = outline.height / 2;
+        const box = [[hw, hh], [-hw, hh], [-hw, -hh], [hw, -hh]]
+          .map(([east, north]) => offsetToSky(outline.ra, outline.dec, east, north))
+          .map(([r, d]) => project(r, d));
+        if (box.every(Boolean)) {
           ctx.save();
           ctx.beginPath();
           box.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));

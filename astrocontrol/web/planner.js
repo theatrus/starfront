@@ -253,21 +253,35 @@
    */
   function regionFromDrag(drag) {
     if (!plan.imageCentre || !drag) return null;
-    // Tangent-plane offsets are already angles on the sky, which is exactly
-    // what Region means by width and height. There is no cosine to apply here
-    // and applying one would be the bug.
-    const corner = (px, py) => screenToOffset(px - plan.width / 2,
-      py - plan.height / 2);
-    const [e0, n0] = corner(drag.x0, drag.y0);
-    const [e1, n1] = corner(drag.x1, drag.y1);
-
-    const width = Math.abs(e1 - e0);
-    const height = Math.abs(n1 - n0);
+    // A Region's width and height are angles on the sky measured about its
+    // own centre. The drag is a rectangle on a picture whose tangent point
+    // is the picture's centre, not the region's, and the two planes differ
+    // by a few percent across a wide field - enough that a box measured in
+    // one and drawn from the other came back a little bigger or smaller
+    // than what was dragged, every time. So the drag's corners are taken to
+    // the sky and measured again in the region's own plane.
+    const sky = (px, py) => unproject(px, py);
+    const centre = sky((drag.x0 + drag.x1) / 2, (drag.y0 + drag.y1) / 2);
+    const corners = [sky(drag.x0, drag.y0), sky(drag.x1, drag.y0),
+      sky(drag.x1, drag.y1), sky(drag.x0, drag.y1)];
+    if (!centre || corners.some((c) => !c)) return null;
+    const [ra, dec] = centre;
+    const local = corners.map(([r, d]) => skyToOffset(ra, dec, r, d));
+    if (local.some((o) => !o)) return null;
+    const [tl, tr, br, bl] = local;
+    const width = (Math.abs(tr[0] - tl[0]) + Math.abs(br[0] - bl[0])) / 2;
+    const height = (Math.abs(tl[1] - bl[1]) + Math.abs(tr[1] - br[1])) / 2;
     if (width < 1e-4 || height < 1e-4) return null;
-
-    const [ra, dec] = offsetToSky(plan.imageCentre.ra, plan.imageCentre.dec,
-      (e0 + e1) / 2, (n0 + n1) / 2);
     return { ra, dec, width, height, rotation: plan.rotation };
+  }
+
+  /** A region's four corners on the sky: its width and height laid out on
+   *  the plane tangent at its own centre, which is what the server tiles
+   *  and what every picture of it draws. */
+  function regionCorners(region) {
+    const hw = region.width / 2, hh = region.height / 2;
+    return [[hw, hh], [-hw, hh], [-hw, -hh], [hw, -hh]]
+      .map(([east, north]) => offsetToSky(region.ra, region.dec, east, north));
   }
 
   function drawRegion() {
@@ -277,13 +291,12 @@
     if (!centre) return;
     const ctx = plan.ctx;
     const scale = pixelsPerDegree();
-    // North up, turned only by the convergence at its own position: north is
-    // not up everywhere on a wide picture. The framing angle is deliberately
-    // *not* in here - see regionFromDrag.
-    const drawAngle = northAngle(plan.imageCentre.ra, plan.imageCentre.dec,
-      region.ra, region.dec);
-    const corners = frameCorners(centre[0], centre[1],
-      region.width / 2 * scale, region.height / 2 * scale, drawAngle);
+    // Drawn from its corners on the sky, each projected onto this picture,
+    // so the box is the same sky whichever picture shows it - and, while
+    // dragging, sits exactly under the pointer. The framing angle is
+    // deliberately not in here - see regionFromDrag.
+    const corners = regionCorners(region).map(([r, d]) => project(r, d));
+    if (corners.some((c) => !c)) return;
 
     ctx.save();
     ctx.beginPath();
@@ -307,7 +320,7 @@
     ctx.shadowColor = 'rgba(0, 0, 0, 0.95)';
     ctx.shadowBlur = 4;
     ctx.fillText(`${region.width.toFixed(2)}° × ${region.height.toFixed(2)}°`,
-      centre[0], centre[1] - region.height / 2 * scale - 8);
+      centre[0], Math.min(...corners.map((c) => c[1])) - 8);
     ctx.restore();
   }
 

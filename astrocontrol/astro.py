@@ -105,6 +105,25 @@ def normalise_ra_hours(ra_hours: float) -> float:
     return ((ra_hours % 24.0) + 24.0) % 24.0
 
 
+def same_half_turn(angle: float, reference: float) -> float:
+    """`angle` or `angle + 180`, whichever lies within a quarter turn of `reference`.
+
+    A camera is a rectangle, and a rectangle turned half a circle covers the
+    same sky, so a plate solver is free to report 95 degrees for a camera the
+    settings call 275. Comparing those two as a 180-degree disagreement, or
+    laying a mosaic out again at the "new" angle, moves every panel number
+    to a different patch of sky for no reason. Anything that reasons about
+    the camera's angle without a rotator brings it to the layout's half-turn
+    first. The result is in [0, 360).
+    """
+    angle = float(angle) % 360.0
+    reference = float(reference) % 360.0
+    gap = ((angle - reference + 180.0) % 360.0) - 180.0
+    if abs(gap) > 90.0:
+        angle = (angle + 180.0) % 360.0
+    return angle
+
+
 def julian_from_timestamp(timestamp: float) -> float:
     """Julian date from a Unix timestamp."""
     return timestamp / 86400.0 + 2440587.5

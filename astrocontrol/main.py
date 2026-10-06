@@ -1896,6 +1896,14 @@ def _camera_angle_measured(target_id: str, measured: float) -> None:
     cells to match. The run then starts the target over on the new panels.
     """
     target = targets.get(target_id)
+    # Half a turn is the same rectangle on the sky. The layout keeps the
+    # half-turn it already has, so panel numbers stay where they were and
+    # only a real turn of the camera moves them.
+    measured = astro.same_half_turn(measured, float(target.get("rotation") or 0.0))
+    with contextlib.suppress(Exception):
+        stored = float(rigs.master.config.get("optics", "rotation", 0.0) or 0.0)
+        if abs(((stored - measured + 180.0) % 360.0) - 180.0) > 0.05:
+            rigs.master.config.update("optics", {"rotation": round(measured, 3)})
     fresh = _reframe_collab_target(
         target, why=f"the camera measures {measured:.1f}° on the sky")
     if fresh is None:

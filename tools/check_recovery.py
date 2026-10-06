@@ -447,6 +447,17 @@ results.append(case("...nor anything on a rig with a rotator, which commands its
 laid, restarted = angle_case(-90.0, COLLAB)      # -90 is 270: 2 degrees off
 results.append(case("...and the gap is measured round the circle",
                     laid == [] and not restarted))
+# The night this pins down: the solver said 95.5 for a camera laid at 268.
+# That is a half-turn plus seven and a half degrees, and a rectangle turned
+# half a circle is the same rectangle - so the real disagreement is 7.5
+# degrees, and the mosaic is re-laid at 275.5, keeping its panel numbers
+# where they were, rather than at 95.5 with every number on new sky.
+laid, restarted = angle_case(95.5, COLLAB)
+results.append(case("a solver reporting the other half-turn is read as the same rectangle",
+                    laid == [("t1", 275.5)] and restarted, f"laid={laid}"))
+laid, restarted = angle_case(88.0, COLLAB)       # 268 - 180: the same footprint
+results.append(case("...and exactly half a turn away is no turn at all",
+                    laid == [] and not restarted, f"laid={laid}"))
 
 print()
 print(f"{sum(results)}/{len(results)} passed")

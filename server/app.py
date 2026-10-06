@@ -742,8 +742,11 @@ def _retile_if_turned(task: dict[str, Any], profile: collab.RigProfile,
         return False
     if was is None and now is None:
         return False
+    # Half a turn is the same rectangle on the sky, so the cells are the
+    # same cells: only the remainder past a half-turn counts as having moved.
     turned = ((was is None) != (now is None)
-              or abs(((float(was) - float(now) + 180.0) % 360.0) - 180.0) > RETILE_DEGREES)
+              or (was is not None and now is not None
+                  and abs(((float(was) - float(now) + 90.0) % 180.0) - 90.0) > RETILE_DEGREES))
     if not turned:
         return False
     payload = project.get("payload") or {}

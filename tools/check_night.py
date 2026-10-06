@@ -991,6 +991,16 @@ ahead = seq._hours_to_meridian(later["ra"])
 case("a panel slewed to after transit counts as already flipped",
      ahead is not None and ahead < 0.0, str(ahead))
 
+print("\n-- a rectangle turned half a circle --")
+case("a solver's 95.5 for a camera laid at 268 is read as 275.5",
+     astro.same_half_turn(95.5, 268.0) == 275.5)
+case("...and 275.5 stays 275.5", astro.same_half_turn(275.5, 268.0) == 275.5)
+case("...the other way round, 268 against 95.5 is 88",
+     astro.same_half_turn(268.0, 95.5) == 88.0)
+case("...across zero: 190 against 350 is 10", astro.same_half_turn(190.0, 350.0) == 10.0)
+case("...and an angle already within a quarter turn is left alone",
+     astro.same_half_turn(45.0, 0.0) == 45.0 and astro.same_half_turn(135.0, 0.0) == 315.0)
+
 print()
 print(f"{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

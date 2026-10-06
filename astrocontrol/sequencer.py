@@ -1095,6 +1095,14 @@ class Sequencer:
                 # keep a night circling.
                 try:
                     target = self.targets.get(target["id"])
+                    # The entry too, not just the target: laying the mosaic
+                    # out again re-mapped the share onto the new panels and
+                    # wrote the new picks on the plan. Starting over with the
+                    # old picks sent the telescope to panel 9 of the new
+                    # layout, which was a different patch of sky from the
+                    # panel 9 it had been promised.
+                    entry = next((e for e in self.plan.raw().get("entries") or []
+                                  if e.get("id") == entry.get("id")), entry)
                     self._say(f"{entry['name']}: starting over on the panels as "
                               "they now are", "warn")
                     self._run_entry(entry, target, reframed=True)
@@ -1785,6 +1793,13 @@ class Sequencer:
         expected = panel.get("rotation")
         if expected is None:
             expected = target.get("rotation") or 0.0
+        # A sensor is a rectangle, and a rectangle turned half a circle
+        # covers the same sky: 95 degrees and 275 degrees are the same
+        # footprint, and a solver that reports the one when the settings say
+        # the other has not found the camera turned. The angle is brought to
+        # the same half-turn as the layout before the two are compared, so
+        # that only a real turn re-lays the panels.
+        measured = astro.same_half_turn(float(measured), float(expected))
         gap = abs(((float(measured) - float(expected) + 180.0) % 360.0) - 180.0)
         if gap <= self.ANGLE_TOLERANCE:
             return

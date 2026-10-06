@@ -354,9 +354,15 @@ class Solver:
 
         stored = self.config.get("optics", "rotation", None)
         try:
-            if stored is not None and abs(((float(stored) - angle + 180) % 360)
-                                          - 180) < 0.05:
-                return                          # already saying the same thing
+            if stored is not None:
+                # The sensor is a rectangle: 95 and 275 degrees are the same
+                # footprint, and the solver's choice between them is
+                # arbitrary. Keep the half-turn the settings already use, so
+                # a mosaic laid at 268 is not re-laid at 95 for a camera that
+                # has not moved.
+                angle = round(astro.same_half_turn(angle, float(stored)), 3)
+                if abs(((float(stored) - angle + 180) % 360) - 180) < 0.05:
+                    return                      # already saying the same thing
         except (TypeError, ValueError):
             pass
         self.config.update("optics", {"rotation": angle})
@@ -572,8 +578,21 @@ class Solver:
             if not centred:
                 self._set("correcting",
                           f"{result.separation:.2f}' out — syncing and re-slewing")
-                mount.sync_to(result.ra, result.dec)
-                mount.slew_to(target_ra, target_dec)
+                try:
+                    mount.sync_to(result.ra, result.dec)
+                    mount.slew_to(target_ra, target_dec)
+                except Exception as exc:          # noqa: BLE001 - the driver's refusal
+                    # Some drivers will not take a sync - TheSky's throws a
+                    # null reference at it - and a centring that gave up
+                    # there left every panel wherever the mount first put it.
+                    # The error is known, so the slew is nudged by it instead:
+                    # ask for the target plus however far short the mount fell.
+                    self.manager.log(f"The mount would not sync ({exc}); nudging the "
+                                     "slew by the measured error instead", "warn")
+                    target_ra = astro.normalise_ra_hours(
+                        target_ra + (target_ra - result.ra))
+                    target_dec = max(-90.0, min(90.0, target_dec + (target_dec - result.dec)))
+                    mount.slew_to(target_ra, target_dec)
                 self._wait_for_slew(mount)
 
         last = self._result.separation if self._result else None

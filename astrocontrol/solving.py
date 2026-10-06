@@ -525,6 +525,7 @@ class Solver:
             mount.slew_to(target_ra, target_dec)
             self._wait_for_slew(mount)
 
+        can_sync = True
         for attempt in range(1, attempts + 1):
             if self._abort.is_set():
                 raise DeviceError("centring aborted")
@@ -578,21 +579,30 @@ class Solver:
             if not centred:
                 self._set("correcting",
                           f"{result.separation:.2f}' out — syncing and re-slewing")
-                try:
-                    mount.sync_to(result.ra, result.dec)
+                synced = False
+                if can_sync:
+                    try:
+                        mount.sync_to(result.ra, result.dec)
+                        synced = True
+                    except Exception as exc:      # noqa: BLE001 - the driver's refusal
+                        # Some drivers will not take a sync - TheSky's throws
+                        # a null reference at it - and a centring that gave
+                        # up there left every panel wherever the mount first
+                        # put it. Not asked again this centring.
+                        can_sync = False
+                        self.manager.log(f"The mount would not sync ({exc}); nudging "
+                                         "the slew by the measured error instead", "warn")
+                if synced:
                     mount.slew_to(target_ra, target_dec)
-                except Exception as exc:          # noqa: BLE001 - the driver's refusal
-                    # Some drivers will not take a sync - TheSky's throws a
-                    # null reference at it - and a centring that gave up
-                    # there left every panel wherever the mount first put it.
-                    # The error is known, so the slew is nudged by it instead:
-                    # ask for the target plus however far short the mount fell.
-                    self.manager.log(f"The mount would not sync ({exc}); nudging the "
-                                     "slew by the measured error instead", "warn")
-                    target_ra = astro.normalise_ra_hours(
-                        target_ra + (target_ra - result.ra))
-                    target_dec = max(-90.0, min(90.0, target_dec + (target_dec - result.dec)))
-                    mount.slew_to(target_ra, target_dec)
+                else:
+                    # The error is known, so the slew is nudged by it: ask for
+                    # the target plus however far short of it the mount
+                    # landed. Always from the *target*, never from the last
+                    # nudged aim - compounding the nudge each attempt walked
+                    # the mount steadily away from the field.
+                    aim_ra = astro.normalise_ra_hours(target_ra + (target_ra - result.ra))
+                    aim_dec = max(-90.0, min(90.0, target_dec + (target_dec - result.dec)))
+                    mount.slew_to(aim_ra, aim_dec)
                 self._wait_for_slew(mount)
 
         last = self._result.separation if self._result else None

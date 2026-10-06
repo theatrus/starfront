@@ -761,6 +761,20 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
     now = time.time()
     changed = 0
     tonight: list[collab.Region] = []          # what earlier rigs hold tonight
+    # Seconds committed tonight per filter by the rigs already dealt, so the
+    # next rig is sent to the filter that is still thinnest once those are
+    # counted. See `collab.choose_filter`.
+    spoken: dict[str, float] = {}
+
+    def commit(task: dict[str, Any]) -> None:
+        visit = task.get("visit") or {}
+        panels = len(task.get("share") or [])
+        exposures = {collab._key(f.get("filter")): float(f.get("exposure") or 0.0)
+                     for f in (task.get("filters") or [])}
+        for name, count in (visit.get("frames") or {}).items():
+            key = collab._key(name)
+            spoken[key] = spoken.get(key, 0.0) + int(count) * exposures.get(key, 0.0) * panels
+
     for task in tasks:
         cells = task.get("cells") or []
         if not cells:
@@ -788,6 +802,7 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
         if current:
             tonight.extend(collab.Region.read(cells[i]) for i in held
                            if 0 <= i < len(cells))
+            commit(task)
             continue
         # Only the rig that asked is dealt afresh. Somebody else's list from
         # an earlier night is theirs until they ask in a new one - their
@@ -796,9 +811,24 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
             continue
         depth, mine = collab.coverage(cells, shot)
         filters = [collab.FilterTask.read(f) for f in (task.get("filters") or [])]
-        share, visit = collab.assign(cells, goals, depth, mine.get(agent_id, {}),
+        night_goals = goals
+        chosen = None
+        if (task.get("kind") or "mosaic") == "mosaic" and len(filters) > 1:
+            # A mosaic night is one filter per telescope, and which one is
+            # the collaboration's call: the filter thinnest across the field
+            # once what the other rigs are putting in tonight is counted.
+            chosen = collab.choose_filter(filters, goals, depth, cells, spoken, hours)
+            if chosen is not None:
+                filters = [chosen]
+                night_goals = {name: value for name, value in goals.items()
+                               if collab._key(name) == collab._key(chosen.filter)}
+                if not night_goals:
+                    night_goals = {chosen.filter: chosen.hours}
+        share, visit = collab.assign(cells, night_goals, depth, mine.get(agent_id, {}),
                                      tonight, hours, filters,
                                      wants.minFramesPerVisit)
+        if chosen is not None:
+            visit["filter"] = chosen.filter
         tonight.extend(collab.Region.read(cells[i]) for i in share)
 
         task["assignedAt"] = now
@@ -813,6 +843,7 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
             task["version"] = int(task.get("version") or 1) + 1
             changed += 1
         store.set_task(task)
+        commit(task)
     return changed
 
 

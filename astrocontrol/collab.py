@@ -468,6 +468,63 @@ def visit_frames(filters: list["FilterTask"], seconds: float,
     return frames
 
 
+def filter_demand(cells: list[dict[str, Any]], goals: dict[str, float],
+                  depth: dict[int, dict[str, float]]) -> dict[str, float]:
+    """Seconds still wanted in each filter, summed over a rig's tiling.
+
+    Keyed by canonical filter name. The depth map is at the resolution of
+    this rig's cells, so the figure is in this rig's cell-seconds - which is
+    what matters, since this rig is the one about to spend a night on it.
+    """
+    demand: dict[str, float] = {}
+    for name, hours in goals.items():
+        key = _key(name)
+        left = 0.0
+        for index in range(len(cells)):
+            left += max(0.0, float(hours) * 3600.0 - depth.get(index, {}).get(key, 0.0))
+        demand[key] = demand.get(key, 0.0) + left
+    return demand
+
+
+def choose_filter(filters: list["FilterTask"], goals: dict[str, float],
+                  depth: dict[int, dict[str, float]], cells: list[dict[str, Any]],
+                  spoken: dict[str, float], hours: float) -> "FilterTask | None":
+    """The one filter a rig shoots tonight on a mosaic.
+
+    One filter a night per telescope: every panel it visits gets a stack in
+    that filter, the wheel never turns between panels, and a night's frames
+    all calibrate with one set of flats. Which filter is the collaboration's
+    choice, not the rig's, and it is made so the project finishes soonest:
+    the filter with the most work still outstanding once what the other
+    telescopes are already putting in tonight is taken off it. Three rigs on
+    a project wanting equal Ha, OIII and SII are sent one to each; when OIII
+    is nearly done nobody is sent to polish it while Ha is thin everywhere.
+
+    `spoken` is the seconds already committed tonight per filter by the rigs
+    dealt before this one. The rig's own night is not subtracted - it is
+    the same for every filter and would not change the choice. Ties go to
+    the project's own filter order.
+    """
+    usable = [f for f in filters if f.exposure > 0]
+    if not usable:
+        return filters[0] if filters else None
+    if len(usable) == 1:
+        return usable[0]
+    wanted = dict(goals)
+    for f in usable:
+        if not any(_key(name) == _key(f.filter) for name in wanted):
+            wanted[f.filter] = f.hours
+    demand = filter_demand(cells, wanted, depth)
+    best = None
+    best_left = None
+    for f in usable:
+        key = _key(f.filter)
+        left = demand.get(key, 0.0) - spoken.get(key, 0.0)
+        if best is None or left > best_left + 1e-6:
+            best, best_left = f, left
+    return best
+
+
 def assign(cells: list[dict[str, Any]], goals: dict[str, float],
            depth: dict[int, dict[str, float]], mine: dict[int, float],
            claimed: list[Region], hours: float, filters: list["FilterTask"],

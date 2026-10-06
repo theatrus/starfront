@@ -924,6 +924,111 @@ _, turned = call("POST", f"/api/v1/agent/projects/{ORION}/join", {},
 cells = turned["task"]["cells"]
 across = max(c["column"] for c in cells) + 1
 down = max(c["row"] for c in cells) + 1
+# ------------------------------------------------- one filter a night each
+print("\n-- a three-filter mosaic: one filter a night per telescope --")
+
+# A mosaic night is one filter per telescope, and which filter is the
+# collaboration's choice: the one with the most still outstanding once what
+# the other rigs are already putting in tonight is counted. Three identical
+# rigs on a project wanting equal Ha, OIII and SII are sent one to each; a
+# filter at depth is handed to nobody; a rig alone on it rotates night by night.
+def enrol_nb(name, hours=6.0):
+    _, made = call("POST", "/api/v1/agents", {"name": name}, token=ADMIN)
+    scale_ = 206.265 * 3.76 / 389.0
+    call("POST", "/api/v1/agent/hello", {
+        "protocol": collab.PROTOCOL,
+        "profile": {"name": name, "focalLength": 389.0, "pixelSize": 3.76,
+                    "sensorWidth": 9576, "sensorHeight": 6388, "binning": 1,
+                    "filters": {"Ha": 3.0, "OIII": 3.0, "SII": 3.0},
+                    "exposures": {"Ha": 300.0, "OIII": 300.0, "SII": 300.0},
+                    "hoursPerNight": hours, "scale": scale_,
+                    "field": [scale_ * 9576 / 3600.0, scale_ * 6388 / 3600.0]}},
+        token=made["token"])
+    return made["token"]
+
+
+NB = [("nb1", enrol_nb("nb1")), ("nb2", enrol_nb("nb2")), ("nb3", enrol_nb("nb3"))]
+_, band = call("POST", "/api/v1/projects", {
+    "name": "Three-band", "region": {"ra": 300.0, "dec": 40.0, "width": 16.0, "height": 8.0},
+    "requirements": {"filters": {"Ha": 3.0, "OIII": 3.0, "SII": 3.0}},
+    "goals": {"Ha": 10.0, "OIII": 10.0, "SII": 10.0}}, token=ADMIN)
+BAND = band["project"]["id"]
+for _, tok in NB:
+    status, _ = call("POST", f"/api/v1/agent/projects/{BAND}/join", {}, token=tok)
+    assert status == 200, status
+
+
+def held_on(token, night, project_id):
+    _, answer = call("GET", f"/api/v1/agent/task?night={night}", token=token)
+    return next(t for t in answer["tasks"] if t["project"] == project_id)
+
+
+def report_night(token, task_, night):
+    rows = []
+    for index in task_["share"]:
+        cell = task_["cells"][index]
+        for filter_name, count in task_["visit"]["frames"].items():
+            exposure = next(f["exposure"] for f in task_["filters"] if f["filter"] == filter_name)
+            rows.append({"task": task_["id"], "night": night, "panel": str(index),
+                         "filterName": filter_name, "frames": count,
+                         "seconds": count * exposure, "exposure": exposure,
+                         "footprint": {"ra": cell["ra"], "dec": cell["dec"],
+                                       "width": cell["width"], "height": cell["height"]},
+                         "scale": 2.0, "hfr": 2.5, "guideRms": 0.7, "bandpass": 3.0})
+    call("POST", "/api/v1/agent/report", {"contributions": rows}, token=token)
+
+
+night1 = {name: held_on(tok, "2026-11-01", BAND) for name, tok in NB}
+filters_night1 = {name: list(t["visit"]["frames"]) for name, t in night1.items()}
+case("each telescope is given exactly one filter for the night",
+     all(len(f) == 1 for f in filters_night1.values()), str(filters_night1))
+case("...and the visit names it",
+     all(t["visit"].get("filter") == list(t["visit"]["frames"])[0] for t in night1.values()))
+case("three telescopes on three equal filters are sent one to each",
+     len({f[0] for f in filters_night1.values()}) == 3, str(filters_night1))
+case("...with the whole night's frames in that filter",
+     all(list(t["visit"]["frames"].values())[0] >= 10 for t in night1.values()),
+     str({n: t["visit"]["frames"] for n, t in night1.items()}))
+
+for name, tok in NB:
+    report_night(tok, night1[name], "2026-11-01")
+
+# Push OIII to the project's depth everywhere: nobody is sent to it after that.
+o_task = night1["nb2"]
+done_rows = []
+for index, cell in enumerate(o_task["cells"]):
+    done_rows.append({"task": o_task["id"], "night": "2026-11-02", "panel": str(index),
+                      "filterName": "OIII", "frames": 200, "seconds": 60000, "exposure": 300,
+                      "footprint": {"ra": cell["ra"], "dec": cell["dec"],
+                                    "width": cell["width"], "height": cell["height"]},
+                      "scale": 2.0, "hfr": 2.5, "guideRms": 0.7, "bandpass": 3.0})
+call("POST", "/api/v1/agent/report", {"contributions": done_rows}, token=NB[1][1])
+night3 = {name: held_on(tok, "2026-11-03", BAND) for name, tok in NB}
+filters_night3 = {name: list(t["visit"]["frames"])[0] for name, t in night3.items()}
+case("a filter at the project's depth is handed to nobody",
+     "O" not in filters_night3.values(), str(filters_night3))
+case("...and the telescopes are spread over what is left",
+     set(filters_night3.values()) == {"H", "S"}, str(filters_night3))
+
+# A rig alone on a three-filter mosaic: one filter a night, moving on as
+# each becomes the deepest.
+_, lone = call("POST", "/api/v1/projects", {
+    "name": "Lone three-band", "region": {"ra": 20.0, "dec": 60.0, "width": 10.0, "height": 6.0},
+    "requirements": {"filters": {"Ha": 3.0, "OIII": 3.0, "SII": 3.0}},
+    "goals": {"Ha": 4.0, "OIII": 4.0, "SII": 4.0}}, token=ADMIN)
+LONE = lone["project"]["id"]
+call("POST", f"/api/v1/agent/projects/{LONE}/join", {}, token=NB[0][1])
+lone_filters = []
+for night in ("2026-11-10", "2026-11-11", "2026-11-12"):
+    t = held_on(NB[0][1], night, LONE)
+    lone_filters.append(list(t["visit"]["frames"])[0])
+    report_night(NB[0][1], t, night)
+case("a telescope alone on a three-filter mosaic shoots one filter a night",
+     all(len(held_on(NB[0][1], n, LONE)["visit"]["frames"]) == 1
+         for n in ("2026-11-10", "2026-11-11", "2026-11-12")))
+case("...and moves to the thinnest filter each night rather than repeating one",
+     len(set(lone_filters)) == 3, " -> ".join(lone_filters))
+
 # ------------------------------------------------------- one target, one spot
 print("\n-- a single-target collaboration --")
 

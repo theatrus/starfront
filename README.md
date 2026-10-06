@@ -1579,8 +1579,22 @@ give ten frames each to seven panels does that rather than seventy to one —
 but never so many that a visit falls under the project's **fewest frames per
 panel a night** in any filter.  A telescope stacks its own frames before
 anything is blended, and three subs on a panel do not stack; ten is the
-default.  Visits are split across the project's filters in proportion to how
-deep it wants each.
+default.
+
+**One filter a night per telescope.**  On a mosaic, every panel a rig visits
+tonight gets its frames in a single filter: the wheel never turns between
+panels, every frame of the night calibrates with one set of flats, and each
+panel ends the night with a stack worth having rather than three thin ones.
+Which filter is the collaboration's choice, not the rig's.  The server takes
+the filter with the most still outstanding across the field once what the
+other telescopes are already putting in tonight is counted — so three rigs on
+a project wanting equal Ha, OIII and SII are sent one to each, a filter that
+has reached depth is handed to nobody, and a rig alone on a three-filter
+project moves from filter to filter as each becomes the deepest.  The Tonight
+line and the filter table on the Plan tab show the one filter dealt.  A
+single-target project still splits each visit across its filters in
+proportion to how deep it wants each, since there is only the one spot of sky
+and every telescope is on it.
 
 The list **holds for the night**.  The program tells the server which night it
 is in on every poll, and the list is remade the first time it asks in a new

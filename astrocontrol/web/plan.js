@@ -2442,7 +2442,12 @@
     if (nightly) {
       const note = document.createElement('div');
       note.className = 'small muted';
-      note.textContent = 'Tonight’s frames per panel are chosen by the server each night '
+      note.textContent = (info.visit && info.visit.filter
+        ? `Tonight is a ${info.visit.filter} night for this telescope: the server gives each `
+          + 'telescope one filter a night on a mosaic, the one the field still wants most '
+          + 'once the others are counted. '
+        : '')
+        + 'Tonight’s frames per panel are chosen by the server each night '
         + 'from what everybody has collected so far: enough on each panel for your own '
         + 'stack, spread over as many panels as your hours hold, on the panels you have '
         + 'been to least.';

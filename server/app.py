@@ -419,6 +419,36 @@ def presence(agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
             "onlineSeconds": ONLINE_SECONDS, "serverTime": now}
 
 
+def _one_task_per_project(tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Retire duplicate shares a rig holds on one project, keeping the newest.
+
+    Joining used to make a fresh task every time, so a rig that pressed the
+    button twice held two shares of the same mosaic and was dealt panels for
+    both. The older ones are marked superseded here, which takes them out of
+    the dealing and the rig's list; the rig's program moves its target onto
+    the one that is left.
+    """
+    kept: list[dict[str, Any]] = []
+    newest: dict[str, dict[str, Any]] = {}
+    for task in tasks:
+        if task.get("state") not in ("offered", "accepted"):
+            kept.append(task)
+            continue
+        project = str(task.get("project") or "")
+        other = newest.get(project)
+        if other is None:
+            newest[project] = task
+            continue
+        loser, winner = ((task, other) if float(task.get("issued") or 0.0)
+                         <= float(other.get("issued") or 0.0) else (other, task))
+        loser["state"] = "superseded"
+        loser["version"] = int(loser.get("version") or 1) + 1
+        store.set_task(loser)
+        kept.append(loser)
+        newest[project] = winner
+    return kept + list(newest.values())
+
+
 @app.get("/api/v1/agent/task")
 def current_task(agent: dict[str, Any] = Depends(agent_from),
                  night: str = Query(default="", max_length=16),
@@ -443,7 +473,7 @@ def current_task(agent: dict[str, Any] = Depends(agent_from),
     rig has to say.
     """
     store.seen(agent["id"])
-    tasks = store.tasks_for(agent["id"])
+    tasks = _one_task_per_project(store.tasks_for(agent["id"]))
     if not tasks:
         return {"task": None, "tasks": [], "version": 0,
                 "protocol": collab.PROTOCOL}
@@ -581,6 +611,19 @@ def join_project(project_id: str, body: JoinRequest,
     if project is None or project.get("status") != "open":
         raise HTTPException(status_code=404, detail="no such open project")
     payload = project.get("payload") or {}
+
+    # Joining twice is one share, not two. A second task for the same rig on
+    # the same project was dealt panels as though it were another telescope,
+    # claimed sky nobody was on, and left the rig with two lists to confuse
+    # its plan with. The one it already holds is handed back.
+    already = [task for task in store.tasks_for(agent["id"])
+               if task.get("project") == project_id
+               and task.get("state") in ("offered", "accepted")]
+    if already:
+        _redeal(project_id)
+        wants = collab.Requirements.read(payload.get("requirements") or {})
+        return {"task": store.task(already[0]["id"]), "requirements": wants.payload(),
+                "alreadyJoined": True}
 
     profile = collab.RigProfile.read(agent.get("profile") or {})
     field = profile.field()
@@ -819,6 +862,13 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None,
                 and len(task.get("filters") or []) > 1
                 and len(((task.get("visit") or {}).get("frames") or {})) > 1):
             current = False
+        # A list dealt before the rig said anything about its Moon is dealt
+        # again the first time it does: a filter chosen blind to a bright
+        # Moon is the wrong filter for the night. Once per list.
+        if (current and asked is not None and moon is not None
+                and len(task.get("filters") or []) > 1
+                and "moon" not in (task.get("visit") or {})):
+            current = False
         if current:
             tonight.extend(collab.Region.read(cells[i]) for i in held
                            if 0 <= i < len(cells))
@@ -850,6 +900,10 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None,
                                      wants.minFramesPerVisit)
         if chosen is not None:
             visit["filter"] = chosen.filter
+        if moon is not None and asked is not None:
+            # What the choice was made under, so a list made blind to the
+            # Moon can be told from one that was not.
+            visit["moon"] = collab.moon_badness(moon)
         tonight.extend(collab.Region.read(cells[i]) for i in share)
 
         task["assignedAt"] = now

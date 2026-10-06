@@ -1660,8 +1660,24 @@ def _follow_server(tasks: list[dict[str, Any]]) -> None:
     what is deliberately left alone. A task nobody has adopted is untouched:
     joining is still a decision somebody makes.
     """
-    for task in tasks or []:
+    live = [t for t in tasks or [] if t.get("state") in ("offered", "accepted")]
+    live_ids = {t.get("id") for t in live}
+    for task in live:
         try:
+            # A target stamped with a share the server has since retired - a
+            # duplicate join it folded into one - moves onto the share that
+            # is left for that project, rather than going stale for ever.
+            target, _entry = adopted_for(task.get("id") or "")
+            if target is None:
+                for candidate in targets.listing():
+                    stamp = candidate.get("collab") or {}
+                    if (stamp.get("project") == task.get("project")
+                            and stamp.get("task") and stamp["task"] not in live_ids):
+                        targets.stamp_collab(candidate["id"],
+                                             {"task": task["id"], "version": 0})
+                        rigs.log(f"Collaboration: {candidate['name']} now follows the "
+                                 "one share the server kept for it", "warn")
+                        break
             _resync_task(task)
         except Exception as exc:                   # noqa: BLE001 - never fatal
             rigs.log(f"Collaboration: could not bring the plan into step - {exc}",
@@ -2008,8 +2024,14 @@ def _apply_task_allocation(entry_id: str, task: dict[str, Any],
     allocation = []
     for item in (task.get("filters") or []):
         name = item.get("filter")
-        count = (int(tonight[name]) if name in tonight
-                 else collab.FilterTask.read(item).frames())
+        if tonight:
+            # A filter the visit does not name is not shot tonight. The
+            # server deals one filter a night on a mosaic, and the others
+            # falling back to the project's full depth here is what turned
+            # "ten frames of Ha on three panels" into a night on one panel.
+            count = int(tonight.get(name) or 0)
+        else:
+            count = collab.FilterTask.read(item).frames()
         allocation.append({"name": name,
                            "exposure": float(item.get("exposure") or 0.0),
                            "count": count})
@@ -4886,6 +4908,19 @@ def arrange_plan(body: ArrangeRequest | None = None) -> dict[str, Any]:
                 continue
             entry, target, info = found
             options = plans.options_for(entry)
+            # A collaboration chunk's filters are the server's to set - which
+            # filter tonight, how many frames on each panel - and the arranger
+            # only places it in the night. Choosing for it here used to divide
+            # its slot by the whole mosaic's panel count, find room for
+            # nothing, empty its list, and so hand the project's full depth on
+            # every filter back onto one panel.
+            if (target.get("collab") or {}).get("project"):
+                chosen.append({"id": entry["id"], "name": entry["name"],
+                               "filters": entry.get("filters") or [],
+                               "notes": ["the collaboration server decides this one's "
+                                         "filters and frames; only its place in the "
+                                         "night was arranged"]})
+                continue
             separation = schedule.dark_overlap(
                 info["window"]["intervals"], moon,
                 astro.normalise_ra_hours(float(target.get("ra") or 0.0)),

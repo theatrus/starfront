@@ -1073,6 +1073,44 @@ status, health = call("GET", "/api/v1/health")
 case("the health line says which build is running",
      bool(health.get("version")), str(health.get("version")))
 
+# A list made before the rig said anything about its Moon is made again,
+# once, when it does: dealt blind it went to OIII, and the night is bright.
+_, blind_project = call("POST", "/api/v1/projects", {
+    "name": "Blind deal", "region": {"ra": 60.0, "dec": 30.0, "width": 10.0, "height": 6.0},
+    # OIII first in the project's order, so a deal that knows nothing of the
+    # Moon - equal progress, tie to the first - lands on it.
+    "requirements": {"filters": {"OIII": 3.0, "Ha": 3.0}},
+    "goals": {"OIII": 6.0, "Ha": 6.0}}, token=ADMIN)
+BLIND = blind_project["project"]["id"]
+call("POST", f"/api/v1/agent/projects/{BLIND}/join", {}, token=NB[1][1])
+blind = held_on(NB[1][1], "2026-12-05", BLIND)
+case("dealt with no word of the Moon, the night goes to what moonlight would spoil",
+     blind["visit"].get("filter") == "O" and "moon" not in blind["visit"], str(blind["visit"]))
+told = held_on(NB[1][1], "2026-12-05", BLIND, "&moon=0.9&moonUp=0.9")
+case("...and is dealt again, once, when the rig reports a bright Moon",
+     told["visit"].get("filter") == "H" and told["version"] > blind["version"], str(told["visit"]))
+again_told = held_on(NB[1][1], "2026-12-05", BLIND, "&moon=0.9&moonUp=0.9")
+case("...after which the list holds for the night",
+     again_told["version"] == told["version"] and again_told["share"] == told["share"])
+
+# Joining twice is one share. The second press hands back the task the rig
+# already holds, and a rig that somehow holds two is left with the newest.
+_, first_join = call("POST", f"/api/v1/agent/projects/{BLIND}/join", {}, token=NB[2][1])
+_, second_join = call("POST", f"/api/v1/agent/projects/{BLIND}/join", {}, token=NB[2][1])
+case("joining a project twice hands back the share already held",
+     second_join.get("alreadyJoined") is True
+     and second_join["task"]["id"] == first_join["task"]["id"])
+dupe = dict(first_join["task"])
+dupe.update({"id": "dupe-task", "issued": float(dupe.get("issued") or 0.0) - 100.0})
+server_app.store.add_task(dupe)
+_, listing = call("GET", "/api/v1/agent/task?night=2026-12-06", token=NB[2][1])
+live = [t for t in listing["tasks"] if t["project"] == BLIND and t["state"] in ("offered", "accepted")]
+retired = server_app.store.task("dupe-task")
+case("a rig holding two shares of one project is left with the newest",
+     len(live) == 1 and live[0]["id"] == first_join["task"]["id"]
+     and retired["state"] == "superseded",
+     f'{len(live)} live, dupe is {retired["state"]}')
+
 # ------------------------------------------------------- one target, one spot
 print("\n-- a single-target collaboration --")
 

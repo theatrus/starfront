@@ -2697,7 +2697,11 @@
       const want = Number(goals[name] || 0);
       const have = Number(got[name] || 0);
       const prog = progress[name];
-      const share = prog ? Number(prog.atGoal || 0)
+      // "Done" is the field's depth against the goal, averaged over the
+      // whole region with every point capped at its goal - so ten hours on
+      // one panel of fifteen reads as a fifteenth done, and the figure
+      // reaches one hundred only when every part of the sky has its goal.
+      const share = prog ? Number(prog.average || 0)
         : (want > 0 ? Math.min(1, have / want) : (have > 0 ? 1 : 0));
 
       const label = document.createElement('span');
@@ -2708,21 +2712,16 @@
       meter.className = `meter${share >= 1 ? ' met' : ''}`;
       meter.innerHTML = '<div class="meter-fill"></div>';
       meter.querySelector('.meter-fill').style.width = `${share * 100}%`;
-      if (prog) {
-        const avg = document.createElement('div');
-        avg.className = 'meter-fill avg';
-        avg.style.width = `${Number(prog.average || 0) * 100}%`;
-        meter.appendChild(avg);
-      }
 
       const value = document.createElement('span');
       value.className = 'mono small';
       value.textContent = prog
-        ? `${Math.round(share * 100)}% of the field at ${want.toFixed(0)}h`
-          + ` · avg ${Math.round(Number(prog.average || 0) * 100)}%`
-          + ` · thinnest ${Math.round(Number(prog.thinnest || 0) * 100)}%`
-          + ` · ${have.toFixed(1)}h shot`
+        ? `${Math.round(share * 100)}% done · ${have.toFixed(1)}h collected`
         : (want > 0 ? `${have.toFixed(1)} / ${want.toFixed(0)}h` : `${have.toFixed(1)}h`);
+      if (prog) {
+        value.title = `${Math.round(Number(prog.atGoal || 0) * 100)}% of the field at the full `
+          + `${want.toFixed(0)}h; the thinnest part has ${Math.round(Number(prog.thinnest || 0) * 100)}%`;
+      }
 
       table.append(label, meter, value);
     }
@@ -2730,9 +2729,9 @@
     if (Object.keys(progress).length) {
       const note = document.createElement('p');
       note.className = 'small muted';
-      note.textContent = 'The bar is the share of the field at the goal depth; the fainter '
-        + 'bar behind it is the field’s average. A mosaic is done when every part of '
-        + 'the sky has its goal, not when the hours add up.';
+      note.textContent = 'Done is depth across the whole field against the goal, so hours on '
+        + 'one panel count for that panel only. It reaches 100% when every part of the '
+        + 'sky has its goal.';
       box.appendChild(note);
     }
     return box;

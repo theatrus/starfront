@@ -512,18 +512,23 @@
         const want = Number(goals[name] || 0);
         const have = Number(got[name] || 0);
         const prog = progress[name];
-        const share = prog ? Number(prog.atGoal || 0) * 100
+        // Done is the field's depth against the goal, averaged over the
+        // region with every point capped at its goal: ten hours on one panel
+        // of fifteen is a fifteenth done, and one hundred means every part
+        // of the sky has its goal.
+        const share = prog ? Number(prog.average || 0) * 100
           : (want > 0 ? Math.min(100, have / want * 100) : (have ? 100 : 0));
-        const avg = prog ? `<div class="meter-fill avg" style="width:${
-          (Number(prog.average || 0) * 100).toFixed(0)}%"></div>` : '';
         const text = prog
-          ? `${share.toFixed(0)}% of field at ${want.toFixed(0)}h · avg ${
-            (Number(prog.average || 0) * 100).toFixed(0)}%`
+          ? `${share.toFixed(0)}% done · ${have.toFixed(1)}h collected`
           : `${have.toFixed(1)}${want ? ` / ${want.toFixed(0)}` : ''}h`;
+        const hint = prog
+          ? ` title="${(Number(prog.atGoal || 0) * 100).toFixed(0)}% of the field at the full ${
+            want.toFixed(0)}h; the thinnest part has ${(Number(prog.thinnest || 0) * 100).toFixed(0)}%"`
+          : '';
         return `<span class="plan-filter-name">${esc(name)}</span>
           <div class="meter${share >= 100 ? ' met' : ''}"><div class="meter-fill"
-               style="width:${share.toFixed(0)}%"></div>${avg}</div>
-          <span class="mono small">${esc(text)}</span>`;
+               style="width:${share.toFixed(0)}%"></div></div>
+          <span class="mono small"${hint}>${esc(text)}</span>`;
       }).join('');
 
       // With a rotator, joining is also a choice about the camera's angle:

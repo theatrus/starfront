@@ -500,6 +500,73 @@ case("nonsense in the panel list is dropped",
      plans.options_for(fresh.raw()["entries"][0])["panels"] == [2, 4],
      f"{plans.options_for(fresh.raw()['entries'][0])['panels']}")
 
+# ------------------------------------------- the deal changing under a run
+print("\n-- a collaboration entry dealt again under the run --")
+
+# Seen on a real night: the join dealt an entry Ha, the sequence started on
+# it, the first poll with the Moon dealt it OIII and rewrote the plan - and
+# the telescope went on shooting the Ha it had started with while the plan
+# said OIII. The run reads the plan again between frames and starts the
+# entry over on what it says now.
+from astrocontrol.sequencer import _Redealt                        # noqa: E402
+
+clock = Clock()
+seq, rig, config, targets, plan = build(clock)
+target, entry = add_target(targets, plan, "Heart", 2.5, 61.5,
+                           [{"name": "H", "exposure": 1.0, "count": 3}])
+targets.stamp_collab(target["id"], {"project": "p", "task": "t", "version": 1})
+target = targets.get(target["id"])
+entry = plan.raw()["entries"][0]
+shots = []
+real_expose = seq._expose_slot
+
+
+def expose_then_redeal(active, frames):
+    shots.append([f["filter"] for f in frames.values()])
+    outcome = real_expose(active, frames)
+    if len(shots) == 1:
+        # The server's new deal lands while the first frame is on the sensor.
+        plan.set_filters(entry["id"], [{"name": "O", "exposure": 1.0, "count": 3}], 1,
+                         10 ** 9, {"perFrame": 0, "filterChange": 0, "perPanel": 0})
+    return outcome
+
+
+seq._expose_slot = expose_then_redeal
+panel = {"index": 1, "ra": 2.5, "dec": 61.5, "rotation": 0.0}
+try:
+    seq._shoot(entry, panel, "Heart", None)
+    stopped = "ran to the end"
+except _Redealt:
+    stopped = "redealt"
+case("a collaboration entry whose deal changed under the run stops to start over",
+     stopped == "redealt" and shots == [["H"]], f"{stopped}, shot {shots}")
+
+# An operator editing their own target mid-run is not a re-deal.
+seq2, rig2, config2, targets2, plan2 = build(Clock())
+own, own_entry = add_target(targets2, plan2, "Mine", 2.5, 61.5,
+                            [{"name": "H", "exposure": 1.0, "count": 2}])
+own_entry = plan2.raw()["entries"][0]
+own_shots = []
+real2 = seq2._expose_slot
+
+
+def expose_then_edit(active, frames):
+    own_shots.append([f["filter"] for f in frames.values()])
+    outcome = real2(active, frames)
+    plan2.set_filters(own_entry["id"], [{"name": "O", "exposure": 1.0, "count": 2}], 1,
+                      10 ** 9, {"perFrame": 0, "filterChange": 0, "perPanel": 0})
+    return outcome
+
+
+seq2._expose_slot = expose_then_edit
+try:
+    seq2._shoot(own_entry, panel, "Mine", None)
+    own_stopped = "ran to the end"
+except _Redealt:
+    own_stopped = "redealt"
+case("...but a target of your own keeps the allocation the run started with",
+     own_stopped == "ran to the end" and own_shots == [["H"], ["H"]], f"{own_stopped}, shot {own_shots}")
+
 print()
 print(f"{sum(results)}/{len(results)} passed")
 sys.exit(0 if all(results) else 1)

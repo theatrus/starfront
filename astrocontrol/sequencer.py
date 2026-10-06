@@ -38,6 +38,7 @@ surprise slew in the dark is worse than a stopped sequence.
 from __future__ import annotations
 
 import contextlib
+import json
 import shutil
 import threading
 import time
@@ -1082,34 +1083,44 @@ class Sequencer:
             self._tell("activity", f"Starting {entry['name']}",
                        self._entry_summary(entry, target))
 
-            try:
-                if target.get("type") == "allsky":
-                    self._run_allsky(entry, target)
-                else:
-                    self._run_entry(entry, target)
-            except _Reframed:
-                # The target was laid out again under the run - the camera
-                # measured at a different angle than its panels assumed. Once:
-                # the fresh panels are read back and the target started over;
-                # a second disagreement is not chased, or a bad solve could
-                # keep a night circling.
+            # Started over when the ground moves under it: the target laid
+            # out again at the camera's real angle, or the entry dealt again
+            # by the collaboration server. A few times at most, so a bad
+            # solve or a server that cannot make its mind up cannot keep a
+            # night circling.
+            restarts = 0
+            reframed = False
+            while True:
                 try:
+                    if target.get("type") == "allsky":
+                        self._run_allsky(entry, target)
+                    else:
+                        self._run_entry(entry, target, reframed=reframed)
+                except (_Reframed, _Redealt) as why:
+                    restarts += 1
+                    if restarts > 3:
+                        self._say(f"{entry['name']}: changed under the run too many "
+                                  "times tonight; leaving it", "warn")
+                        break
+                    # The target and the entry both, fresh from disk: a re-lay
+                    # re-mapped the share onto new panels and wrote the new
+                    # picks on the plan, and a re-deal wrote new filters and
+                    # counts. Starting over with the old copy sent the
+                    # telescope to the wrong panel in the wrong filter.
                     target = self.targets.get(target["id"])
-                    # The entry too, not just the target: laying the mosaic
-                    # out again re-mapped the share onto the new panels and
-                    # wrote the new picks on the plan. Starting over with the
-                    # old picks sent the telescope to panel 9 of the new
-                    # layout, which was a different patch of sky from the
-                    # panel 9 it had been promised.
                     entry = next((e for e in self.plan.raw().get("entries") or []
                                   if e.get("id") == entry.get("id")), entry)
-                    self._say(f"{entry['name']}: starting over on the panels as "
-                              "they now are", "warn")
-                    self._run_entry(entry, target, reframed=True)
+                    if isinstance(why, _Reframed):
+                        reframed = True
+                        self._say(f"{entry['name']}: starting over on the panels as "
+                                  "they now are", "warn")
+                    else:
+                        self._say(f"{entry['name']}: the deal changed under the run - "
+                                  "starting over on what the plan says now", "warn")
+                    continue
                 except _Skipped:
                     self._say(f"Skipped {entry['name']}", "warn")
-            except _Skipped:
-                self._say(f"Skipped {entry['name']}", "warn")
+                break
 
     def _entry_summary(self, entry: dict[str, Any],
                        target: dict[str, Any] | None) -> str:
@@ -3390,6 +3401,31 @@ class Sequencer:
                   "limit — stopping here", "warn")
         return True
 
+    def _deal_key(self, entry: dict[str, Any], rigs: list[Any], master_id: str) -> str:
+        """What the entry asks for, as one string: filters, counts and panels."""
+        options = plans.options_for(entry)
+        return json.dumps({
+            "filters": {rig.id: plans.allocation_for(entry, rig.id, master_id)
+                        for rig in rigs},
+            "panels": sorted(int(i) for i in (options.get("panels") or [])),
+        }, sort_keys=True)
+
+    def _deal_changed(self, entry: dict[str, Any], rigs: list[Any],
+                      master_id: str, dealt: str) -> bool:
+        """Whether the plan now asks something else of this entry."""
+        if not (self.targets.get(entry.get("targetId") or "") or {}).get("collab"):
+            # Only a collaboration entry is dealt by anybody but the operator,
+            # and an operator editing the plan mid-run gets what the run
+            # started with, as always.
+            return False
+        with contextlib.suppress(Exception):
+            fresh = next((e for e in self.plan.raw().get("entries") or []
+                          if e.get("id") == entry.get("id")), None)
+            if fresh is None:
+                return False
+            return self._deal_key(fresh, rigs, master_id) != dealt
+        return False
+
     def _shoot(self, entry: dict[str, Any], panel: dict[str, Any], label: str,
                end_at: float | None) -> bool:
         """Work through one panel, one slot at a time, on every telescope.
@@ -3416,6 +3452,7 @@ class Sequencer:
             self._slots = slots
         if not slots:
             return True
+        dealt = self._deal_key(entry, rigs, master_id)
 
         # A panel slewed to after it crossed the meridian is already on the
         # side the driver chose for it, and "flipping" it would be a second
@@ -3429,6 +3466,13 @@ class Sequencer:
                 raise _Skipped()
             with self._lock:
                 self._slot = slot + 1
+            # Between frames, the plan is read again: a collaboration entry
+            # can be dealt afresh by the server while the run is on it - the
+            # join dealt it blind to the Moon, the first poll with the Moon
+            # dealt it again - and the night must follow the deal, not the
+            # copy the run started with.
+            if self._deal_changed(entry, rigs, master_id, dealt):
+                raise _Redealt()
 
             # Whoever still has a frame at this slot takes part; a telescope
             # that ran out of allocation simply sits the rest of the panel out.
@@ -3520,6 +3564,17 @@ class _Skipped(Exception):
 
 class _Reframed(Exception):
     """The target's panels were laid out again under the run; start it over."""
+
+
+class _Redealt(Exception):
+    """The entry's deal changed under the run - other filters, other panels.
+
+    A collaboration's list for the night is dealt by the server and can be
+    dealt again after the run has started: the join dealt it blind to the
+    Moon, the first poll with the Moon dealt it afresh, and the plan said
+    OIII while the telescope went on shooting the Ha it had started with.
+    The run reads the plan again and starts the entry over on what it says.
+    """
 
 
 def _clock(timestamp: float) -> str:

@@ -510,10 +510,19 @@ class CollabClient:
         shoots for the project can be calibrated. An exposure named here
         only stands in for a filter with no default of its own.
         """
+        body: dict[str, Any] = {"hours": hours, "exposure": exposure,
+                                "exposures": self._default_exposures(),
+                                # Tonight, and tonight's Moon, so the first
+                                # deal is the one the night keeps.
+                                "night": CaptureService.night_name()}
+        if self.moon_hint is not None:
+            with _quiet():
+                sky = self.moon_hint() or {}
+                if sky.get("illumination") is not None and sky.get("upFraction") is not None:
+                    body["moon"] = round(float(sky["illumination"]), 3)
+                    body["moonUp"] = round(float(sky["upFraction"]), 3)
         answer = self._call(
-            "POST", f"/api/v1/agent/projects/{project_id}/join",
-            {"hours": hours, "exposure": exposure,
-             "exposures": self._default_exposures()})
+            "POST", f"/api/v1/agent/projects/{project_id}/join", body)
         task = answer.get("task")
         if task:
             with self._lock:

@@ -675,6 +675,13 @@ class JoinRequest(BaseModel):
     #: built for. The share is dealt at these, so every light can be
     #: calibrated; a rig is assumed to have chosen them well.
     exposures: dict[str, float] = Field(default_factory=dict)
+    #: Which night the rig is in and what its Moon is doing, so the first
+    #: deal is tonight's and made with the Moon in mind. A join that dealt
+    #: blind got one filter and the first poll another, under a running
+    #: sequence.
+    night: str = Field(default="", max_length=16)
+    moon: float | None = Field(default=None, ge=0.0, le=1.0)
+    moonUp: float | None = Field(default=None, ge=0.0, le=1.0)
 
 
 @app.post("/api/v1/agent/projects/{project_id}/join")
@@ -702,8 +709,11 @@ def join_project(project_id: str, body: JoinRequest,
     already = [task for task in store.tasks_for(agent["id"])
                if task.get("project") == project_id
                and task.get("state") in ("offered", "accepted")]
+    nights = {agent["id"]: body.night.strip()} if body.night.strip() else None
+    sky = ({"illumination": body.moon, "upFraction": body.moonUp}
+           if body.moon is not None and body.moonUp is not None else None)
     if already:
-        _redeal(project_id)
+        _redeal(project_id, nights, moon=sky)
         wants = collab.Requirements.read(payload.get("requirements") or {})
         return {"task": store.task(already[0]["id"]), "requirements": wants.payload(),
                 "alreadyJoined": True}
@@ -777,7 +787,7 @@ def join_project(project_id: str, body: JoinRequest,
     # somewhere else can be noticed and the cells cut again.
     stored["tiledRotation"] = profile.rotation
     store.add_task(stored)
-    _redeal(project_id)
+    _redeal(project_id, nights, moon=sky)
     return {"task": store.task(task.id), "requirements": wants.payload()}
 
 

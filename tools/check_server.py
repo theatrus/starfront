@@ -1151,8 +1151,8 @@ case("...its one cell is its own frame, centred on the object",
      f'{one["task"]["cells"][0]["ra"]:.2f}')
 case("...and the task says it is a single target",
      one["task"].get("kind") == "single")
-tonight_one = held_on = call("GET", "/api/v1/agent/task?night=2026-10-08",
-                             token=NARROW_TOKEN)[1]
+tonight_one = call("GET", "/api/v1/agent/task?night=2026-10-08",
+                   token=NARROW_TOKEN)[1]
 spot_task = next(t for t in tonight_one["tasks"] if t["project"] == SPOT)
 case("...dealt that one cell for the night, with the whole night on it",
      spot_task["share"] == [0]
@@ -1345,6 +1345,26 @@ wants = (shown.get("payload") or {}).get("requirements") or {}
 case("...and every rig browsing it sees them",
      wants.get("minAltitude") == 40.0 and wants.get("minMoonSeparation") == 50.0,
      str(wants))
+
+# A join that says which night it is and what the Moon is doing is dealt
+# for that night with the Moon in mind, so the first deal is the one the
+# night keeps - rather than a blind deal that the first poll replaces under
+# a sequence already shooting it.
+_, moonjoin = call("POST", "/api/v1/projects", {
+    "name": "Join under the Moon", "region": {"ra": 80.0, "dec": 30.0, "width": 10.0, "height": 6.0},
+    "requirements": {"filters": {"OIII": 3.0, "Ha": 3.0}},
+    "goals": {"OIII": 6.0, "Ha": 6.0}}, token=ADMIN)
+MOONJOIN = moonjoin["project"]["id"]
+_, joined_bright = call("POST", f"/api/v1/agent/projects/{MOONJOIN}/join",
+                        {"night": "2026-12-30", "moon": 0.9, "moonUp": 0.9}, token=NB[2][1])
+case("a join that carries the night and a bright Moon is dealt narrowband at once",
+     joined_bright["task"]["visit"].get("filter") == "H"
+     and joined_bright["task"].get("assignedNight") == "2026-12-30",
+     str(joined_bright["task"]["visit"]))
+held_after = held_on(NB[2][1], "2026-12-30", MOONJOIN, "&moon=0.9&moonUp=0.9")
+case("...and the first poll of that night keeps it",
+     held_after["version"] == joined_bright["task"]["version"]
+     and held_after["visit"].get("filter") == "H")
 
 # ------------------------------------------- progress is depth everywhere
 print("\n-- progress: the goal at every point of the field --")

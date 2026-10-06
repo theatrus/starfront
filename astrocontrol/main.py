@@ -4665,7 +4665,9 @@ def _entry_budget(entry_id: str) -> tuple[dict[str, Any], dict[str, Any]]:
 
     latitude, longitude = _require_site()
     minimum_altitude = float(config.get("schedule", "minAltitude", 30.0))
-    night_info = _night_for(stored.get("date"))
+    # Tonight, always: the plan's stored date is whatever night it was last
+    # saved on, and a budget worked out for last Tuesday's sky is wrong.
+    night_info = _night_for(None)
     return entry, _target_schedule(target, night_info, latitude, longitude,
                                    minimum_altitude, entry)
 
@@ -4809,7 +4811,9 @@ def arrange_plan(body: ArrangeRequest | None = None) -> dict[str, Any]:
     stored = plan.raw()
     known = {t["id"]: t for t in targets.listing()}
     minimum_altitude = float(config.get("schedule", "minAltitude", 30.0))
-    night_info = _night_for(stored.get("date"))
+    # Tonight, not the night the plan was last saved on: arranged against a
+    # stale date, the Moon was reported two thirds lit on a crescent night.
+    night_info = _night_for(None)
     overheads = _overheads()
     autoplan_settings = config.section("autoplan")
 

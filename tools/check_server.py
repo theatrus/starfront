@@ -1259,6 +1259,24 @@ same_again = next(t for t in polled_again["tasks"] if t["id"] == turned["task"][
 case("...and once they match, nothing is cut again",
      same_again["version"] == recut["version"] and same_again["cells"] == recut["cells"])
 
+# The camera's angle in the profile moves by a few hundredths of a degree
+# with every plate solve. That is the same tiling with a wobble, not a new
+# rule, and must not re-cut the cells - re-cutting cleared the share and
+# restarted the rig's run every couple of hours, all night.
+call("POST", "/api/v1/agent/hello", {
+    "protocol": collab.PROTOCOL,
+    "profile": {"name": "fixed", "focalLength": 389.0, "pixelSize": 3.76,
+                "sensorWidth": 9576, "sensorHeight": 6388, "binning": 1,
+                "filters": {"Ha": 3.0}, "hoursPerNight": 4.0, "rotation": 268.08,
+                "scale": scale, "field": [scale * 9576 / 3600.0, scale * 6388 / 3600.0]}},
+    token=fixed_made["token"])
+_, wobbled = call("GET", "/api/v1/agent/task?night=2026-12-10", token=fixed_made["token"])
+wobble_task = next(t for t in wobbled["tasks"] if t["id"] == turned["task"]["id"])
+case("a solve's worth of wobble in the camera angle does not re-cut the cells",
+     wobble_task["version"] == recut["version"] and wobble_task["cells"] == recut["cells"]
+     and wobble_task["share"] == recut["share"],
+     f'v{recut["version"]} -> v{wobble_task["version"]}')
+
 # --------------------------------------- dealt at the rig's own exposures
 # A share is dealt at the exposure each rig shoots that filter at - what its
 # darks are built for - so every light it takes can be calibrated. A default

@@ -20,6 +20,7 @@ person's login should never be able to drive a mount.
 
 from __future__ import annotations
 
+import math
 import os
 import secrets
 import sys
@@ -819,18 +820,31 @@ def _tile(region: collab.Region, kind: str,
 RETILE_DEGREES = 2.0
 
 
+#: How far a cell's centre may sit from where the tiling would put it now
+#: before the cells count as cut by a different rule. A fifth of a degree:
+#: a twentieth of a panel. The camera's angle in a rig's profile moves by a
+#: few hundredths of a degree with every plate solve, which swings the
+#: outermost cells of a wide mosaic by a hundredth or two - and a tolerance
+#: that caught that re-cut the cells, cleared the share and restarted the
+#: rig's run every couple of hours, all night.
+SAME_CELL_DEGREES = 0.2
+
+
 def _same_cells(stored: list[dict[str, Any]], fresh: list[dict[str, Any]]) -> bool:
     """Whether a task's cells are the ones the tiling would cut now.
 
-    Count and centres, to a hundredth of a degree; the sizes follow from
-    the same camera and need no checking of their own.
+    Count and centres, to within `SAME_CELL_DEGREES`; the sizes follow from
+    the same camera and need no checking of their own. This tells a tiling
+    rule that has changed from the same rule applied to a camera angle that
+    has wobbled by a solve's worth.
     """
     if len(stored) != len(fresh):
         return False
     for a, b in zip(stored, fresh):
         try:
-            if (abs(((float(a["ra"]) - float(b["ra"]) + 180.0) % 360.0) - 180.0) > 0.01
-                    or abs(float(a["dec"]) - float(b["dec"])) > 0.01):
+            cosine = max(0.05, math.cos(math.radians(float(a["dec"]))))
+            east = (((float(a["ra"]) - float(b["ra"]) + 180.0) % 360.0) - 180.0) * cosine
+            if abs(east) > SAME_CELL_DEGREES or abs(float(a["dec"]) - float(b["dec"])) > SAME_CELL_DEGREES:
                 return False
         except (KeyError, TypeError, ValueError):
             return False

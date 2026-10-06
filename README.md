@@ -1487,6 +1487,18 @@ Nothing starts on its own.  A task arrives **offered** and stays that way until
 somebody accepts it, and the server can go down without taking a night with it:
 it is a source of suggestions, never a dependency.
 
+### How far a collaboration has got
+
+"Collected by everyone" reads **percent done** and **hours collected** per
+filter.  Done is depth against the goal measured across the whole field — the
+server cuts the region into a fine grid, credits each cell with the frames
+that really landed on it, caps every cell at the goal and averages — so ten
+hours on one panel of fifteen is a fifteenth done, not two thirds of a
+ten-hour goal, and the figure reaches one hundred only when every part of the
+sky has its goal.  The hours are the plain total of accepted frames.  Hover
+the figure for the share of the field already at full depth and how thin the
+thinnest part still is.
+
 ### Looking back through the night
 
 The image viewer follows the camera: each frame that lands replaces the one

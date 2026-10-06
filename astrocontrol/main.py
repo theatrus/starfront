@@ -2420,6 +2420,37 @@ def _collab_hours_hint() -> float:
 
 
 collab_client.hours_hint = _collab_hours_hint
+
+
+def _collab_moon_hint() -> dict[str, Any] | None:
+    """Tonight's Moon at this site, for the server's choice of filter.
+
+    How much of it is lit, and what fraction of the dark hours it is above
+    the horizon. The two together say whether tonight is one for Ha and SII
+    or one for everything else; see `collab.choose_filter`.
+    """
+    site = effective_site(config, rigs.master.manager)
+    if site.get("latitude") is None:
+        return None
+    latitude, longitude = float(site["latitude"]), float(site["longitude"])
+    night_info = schedule.night(latitude, longitude)
+    moon = schedule.moon_track(latitude, longitude, night_info)
+    start = night_info.get("duskAstronomical") or night_info.get("sunset")
+    end = night_info.get("dawnAstronomical") or night_info.get("sunrise")
+    if not start or not end or end <= start:
+        return None
+    # The Moon's track is sampled from sunset to sunrise; what matters is how
+    # much of the *dark* it is up for, so only the samples inside the dark
+    # hours are counted.
+    dark = [s for s in (moon.get("curve") or []) if start <= s.get("t", 0) <= end]
+    if not dark:
+        return None
+    up = sum(1 for s in dark if s.get("alt", -90.0) > 0.0)
+    return {"illumination": round(float(moon.get("illumination") or 0.0), 3),
+            "upFraction": round(up / len(dark), 3)}
+
+
+collab_client.moon_hint = _collab_moon_hint
 sequencer.on_camera_angle = _camera_angle_measured
 
 

@@ -1585,13 +1585,19 @@ default.
 tonight gets its frames in a single filter: the wheel never turns between
 panels, every frame of the night calibrates with one set of flats, and each
 panel ends the night with a stack worth having rather than three thin ones.
-Which filter is the collaboration's choice, not the rig's.  The server takes
-the filter with the most still outstanding across the field once what the
-other telescopes are already putting in tonight is counted — so three rigs on
-a project wanting equal Ha, OIII and SII are sent one to each, a filter that
-has reached depth is handed to nobody, and a rig alone on a three-filter
-project moves from filter to filter as each becomes the deepest.  The Tonight
-line and the filter table on the Plan tab show the one filter dealt.  A
+Which filter is the collaboration's choice, not the rig's, made in two steps.
+**The Moon first:** the program tells the server how lit tonight's Moon is at
+its site and how much of the dark hours it is up, and a bright Moon makes it a
+night for Ha or SII, which shoot through moonlight, while a dark night is spent
+on what cannot be shot any other time — luminance, the colour filters, OIII —
+with the narrowband kept for the moonlit nights to come.  **Then the least
+progress:** among those, the filter with the most still outstanding across the
+field once what the other telescopes are already putting in tonight is counted.
+So three rigs on a project wanting equal Ha, OIII and SII under no Moon are
+sent OIII, then Ha, then SII; a filter that has reached depth is handed to
+nobody; and a rig alone on a three-filter project moves from filter to filter
+as each becomes the deepest.  The Tonight block on the Plan tab says which
+filter the night is, panel by panel.  A
 single-target project still splits each visit across its filters in
 proportion to how deep it wants each, since there is only the one spot of sky
 and every telescope is on it.

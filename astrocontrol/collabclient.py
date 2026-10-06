@@ -77,6 +77,8 @@ class CollabClient:
         #: the program from its plan (the span pinned on a collaboration's
         #: entry). Set by whoever builds both; None means nobody has said.
         self.hours_hint: Any = None
+        #: Tonight's Moon at this site: {"illumination", "upFraction"}.
+        self.moon_hint: Any = None
         #: Called after every successful poll, on the polling thread, with the
         #: list of tasks. The program hangs its "bring the plan into step"
         #: on this: the server deals each night's panels afresh, and a deal
@@ -370,7 +372,17 @@ class CollabClient:
         # a rig's panels once per night and holds them, and this is how it
         # knows when the night has turned.
         night = CaptureService.night_name()
-        answer = self._call("GET", f"/api/v1/agent/task?night={night}")
+        query = f"night={night}"
+        # Tonight's Moon at this site, so the server can make it a narrowband
+        # night or a broadband one. The server knows nothing of where this
+        # telescope is, so it has to be told.
+        if self.moon_hint is not None:
+            with _quiet():
+                sky = self.moon_hint() or {}
+                if sky.get("illumination") is not None and sky.get("upFraction") is not None:
+                    query += (f"&moon={float(sky['illumination']):.3f}"
+                              f"&moonUp={float(sky['upFraction']):.3f}")
+        answer = self._call("GET", f"/api/v1/agent/task?{query}")
         task = answer.get("task")
         # Older servers answer with one task and no list; one task is still a
         # list of one, so the rest of the program need not know the difference.

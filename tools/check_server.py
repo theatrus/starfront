@@ -958,8 +958,8 @@ for _, tok in NB:
     assert status == 200, status
 
 
-def held_on(token, night, project_id):
-    _, answer = call("GET", f"/api/v1/agent/task?night={night}", token=token)
+def held_on(token, night, project_id, extra=""):
+    _, answer = call("GET", f"/api/v1/agent/task?night={night}{extra}", token=token)
     return next(t for t in answer["tasks"] if t["project"] == project_id)
 
 
@@ -1028,6 +1028,50 @@ case("a telescope alone on a three-filter mosaic shoots one filter a night",
          for n in ("2026-11-10", "2026-11-11", "2026-11-12")))
 case("...and moves to the thinnest filter each night rather than repeating one",
      len(set(lone_filters)) == 3, " -> ".join(lone_filters))
+
+# The Moon decides the kind of filter. A rig tells the server how lit the
+# Moon is and how much of its dark hours it is up; a bright Moon makes it a
+# night for Ha or SII, a dark one a night for OIII, LRGB - what cannot be
+# shot any other time - with the narrowband kept for the moonlit nights.
+_, moony = call("POST", "/api/v1/projects", {
+    "name": "Moon test", "region": {"ra": 40.0, "dec": 50.0, "width": 10.0, "height": 6.0},
+    "requirements": {"filters": {"Ha": 3.0, "OIII": 3.0, "SII": 3.0}},
+    "goals": {"Ha": 6.0, "OIII": 6.0, "SII": 6.0}}, token=ADMIN)
+MOONY = moony["project"]["id"]
+call("POST", f"/api/v1/agent/projects/{MOONY}/join", {}, token=NB[2][1])
+dark_night = held_on(NB[2][1], "2026-11-15", MOONY, "&moon=0.05&moonUp=0.1")
+case("under no Moon the night goes to what moonlight would spoil: OIII first",
+     dark_night["visit"].get("filter") == "O", str(dark_night["visit"]))
+bright_night = held_on(NB[2][1], "2026-11-26", MOONY, "&moon=0.95&moonUp=0.9")
+case("under a bright Moon the night goes to the narrowband that shoots through it",
+     bright_night["visit"].get("filter") in ("H", "S"), str(bright_night["visit"]))
+# All of the Moon-proof work done: a bright night is still spent on what is left.
+for name in ("Ha", "SII"):
+    rows_ = [{"task": bright_night["id"], "night": "2026-11-27", "panel": str(i),
+              "filterName": name, "frames": 200, "seconds": 60000, "exposure": 300,
+              "footprint": {"ra": c["ra"], "dec": c["dec"], "width": c["width"], "height": c["height"]},
+              "scale": 2.0, "hfr": 2.5, "guideRms": 0.7, "bandpass": 3.0}
+             for i, c in enumerate(bright_night["cells"])]
+    call("POST", "/api/v1/agent/report", {"contributions": rows_}, token=NB[2][1])
+leftover = held_on(NB[2][1], "2026-11-28", MOONY, "&moon=0.95&moonUp=0.9")
+case("...and when the narrowband is finished, a bright night still shoots what is left",
+     leftover["visit"].get("filter") == "O", str(leftover["visit"]))
+
+# A list dealt the old way - every filter on every panel - is not held for
+# the night: the first poll after the change deals it again, one filter.
+from server import app as server_app                                 # noqa: E402
+old_style = held_on(NB[0][1], "2026-12-01", BAND)
+stale = dict(old_style)
+stale["visit"] = {"seconds": 18000.0,
+                  "frames": {f["filter"]: 10 for f in old_style["filters"]}}
+server_app.store.set_task(stale)
+again = held_on(NB[0][1], "2026-12-01", BAND)
+case("a night dealt the old way, every filter on every panel, is dealt again as one filter",
+     len(again["visit"]["frames"]) == 1 and again["version"] > old_style["version"],
+     f'{again["visit"]["frames"]} v{again["version"]} (was v{old_style["version"]})')
+status, health = call("GET", "/api/v1/health")
+case("the health line says which build is running",
+     bool(health.get("version")), str(health.get("version")))
 
 # ------------------------------------------------------- one target, one spot
 print("\n-- a single-target collaboration --")

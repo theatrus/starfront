@@ -486,24 +486,57 @@ def filter_demand(cells: list[dict[str, Any]], goals: dict[str, float],
     return demand
 
 
+#: Filters that shoot through moonlight: the red narrowband lines. Everything
+#: else - luminance, the colour filters, OIII - is washed out by a bright
+#: Moon and is saved for the dark nights.
+MOON_TOLERANT = frozenset({"h", "s", "n"})       # as `_key` spells them
+
+#: How much Moon makes a night a narrowband night: the fraction of the dark
+#: hours it is up, times how much of it is lit. A half Moon up half the night
+#: is 0.25; a thin crescent setting at dusk is nearly nothing.
+MOON_BRIGHT = 0.2
+
+
+def moon_badness(moon: dict[str, Any] | None) -> float | None:
+    """One number for how much the Moon spoils tonight, or None if unknown."""
+    if not moon:
+        return None
+    try:
+        lit = float(moon.get("illumination"))
+        up = float(moon.get("upFraction"))
+    except (TypeError, ValueError):
+        return None
+    return max(0.0, min(1.0, lit)) * max(0.0, min(1.0, up))
+
+
 def choose_filter(filters: list["FilterTask"], goals: dict[str, float],
                   depth: dict[int, dict[str, float]], cells: list[dict[str, Any]],
-                  spoken: dict[str, float], hours: float) -> "FilterTask | None":
+                  spoken: dict[str, float], hours: float,
+                  moon: dict[str, Any] | None = None) -> "FilterTask | None":
     """The one filter a rig shoots tonight on a mosaic.
 
     One filter a night per telescope: every panel it visits gets a stack in
     that filter, the wheel never turns between panels, and a night's frames
     all calibrate with one set of flats. Which filter is the collaboration's
-    choice, not the rig's, and it is made so the project finishes soonest:
-    the filter with the most work still outstanding once what the other
-    telescopes are already putting in tonight is taken off it. Three rigs on
-    a project wanting equal Ha, OIII and SII are sent one to each; when OIII
-    is nearly done nobody is sent to polish it while Ha is thin everywhere.
+    choice, not the rig's, and it is made in two steps.
+
+    **The Moon first.** A bright Moon up for most of the dark hours makes it a
+    night for Ha or SII, which shoot through moonlight; a dark night is spent
+    on what cannot be shot any other time - luminance, the colour filters,
+    OIII - and the narrowband is kept for the moonlit nights to come. Only
+    filters still wanting work are considered, and when nothing of the
+    preferred kind is left the other kind is used rather than nothing.
+
+    **Then the least progress.** Among those, the filter with the most work
+    still outstanding across the field once what the other telescopes are
+    already putting in tonight is taken off it. Three rigs on a project
+    wanting equal Ha, OIII and SII under no Moon are sent OIII, then Ha, then
+    SII; when OIII is done nobody is sent to polish it while Ha is thin.
 
     `spoken` is the seconds already committed tonight per filter by the rigs
-    dealt before this one. The rig's own night is not subtracted - it is
-    the same for every filter and would not change the choice. Ties go to
-    the project's own filter order.
+    dealt before this one. `moon` is the asking rig's own sky tonight, as it
+    reported it; without it the Moon is not considered. Ties go to the
+    project's own filter order.
     """
     usable = [f for f in filters if f.exposure > 0]
     if not usable:
@@ -515,13 +548,22 @@ def choose_filter(filters: list["FilterTask"], goals: dict[str, float],
         if not any(_key(name) == _key(f.filter) for name in wanted):
             wanted[f.filter] = f.hours
     demand = filter_demand(cells, wanted, depth)
+    left = {f.filter: demand.get(_key(f.filter), 0.0) - spoken.get(_key(f.filter), 0.0)
+            for f in usable}
+
+    candidates = [f for f in usable if left[f.filter] > 0] or list(usable)
+    badness = moon_badness(moon)
+    if badness is not None:
+        tolerant = [f for f in candidates if _key(f.filter) in MOON_TOLERANT]
+        sensitive = [f for f in candidates if _key(f.filter) not in MOON_TOLERANT]
+        preferred = tolerant if badness >= MOON_BRIGHT else sensitive
+        if preferred:
+            candidates = preferred
+
     best = None
-    best_left = None
-    for f in usable:
-        key = _key(f.filter)
-        left = demand.get(key, 0.0) - spoken.get(key, 0.0)
-        if best is None or left > best_left + 1e-6:
-            best, best_left = f, left
+    for f in candidates:
+        if best is None or left[f.filter] > left[best.filter] + 1e-6:
+            best = f
     return best
 
 

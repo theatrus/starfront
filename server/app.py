@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import astrocontrol                                              # noqa: E402
 from astrocontrol import collab, filters                         # noqa: E402
 from astrocontrol.config import data_root                        # noqa: E402
 from server import auth                                          # noqa: E402
@@ -420,7 +421,9 @@ def presence(agent: dict[str, Any] = Depends(agent_from)) -> dict[str, Any]:
 
 @app.get("/api/v1/agent/task")
 def current_task(agent: dict[str, Any] = Depends(agent_from),
-                 night: str = Query(default="", max_length=16)) -> dict[str, Any]:
+                 night: str = Query(default="", max_length=16),
+                 moon: float | None = Query(default=None, ge=0.0, le=1.0),
+                 moonUp: float | None = Query(default=None, ge=0.0, le=1.0)) -> dict[str, Any]:
     """What this telescope should be shooting.
 
     The whole point of the server, from an observatory's side. Returns the
@@ -432,6 +435,12 @@ def current_task(agent: dict[str, Any] = Depends(agent_from),
     move under a run because somebody else's frames arrived at 2 a.m. — and
     are dealt afresh the first time it asks in the next one. A client that
     does not say falls back to a list held for twenty hours.
+
+    `moon` and `moonUp` are the rig's own sky tonight: how much of the Moon
+    is lit, and the fraction of its dark hours the Moon is above its horizon.
+    They decide whether tonight is a narrowband night for it; see
+    `collab.choose_filter`. The server has no idea where any rig is, so the
+    rig has to say.
     """
     store.seen(agent["id"])
     tasks = store.tasks_for(agent["id"])
@@ -448,8 +457,11 @@ def current_task(agent: dict[str, Any] = Depends(agent_from),
     # Shares move as others join and as frames come in, and a poll is when a
     # rig finds out. Cheap when nothing has changed: a share that is the same
     # is not rewritten, so the version stays put and the rig has nothing to do.
+    sky = ({"illumination": moon, "upFraction": moonUp}
+           if moon is not None and moonUp is not None else None)
     for project_id in {task["project"] for task in tasks}:
-        _redeal(project_id, {agent["id"]: night.strip()} if night.strip() else None)
+        _redeal(project_id, {agent["id"]: night.strip()} if night.strip() else None,
+                moon=sky)
     tasks = store.tasks_for(agent["id"])
     task = tasks[0]
     project = store.project(task["project"])
@@ -715,7 +727,8 @@ DEFAULT_HOURS_PER_NIGHT = 6.0
 ASSIGNMENT_HOLD_SECONDS = 20 * 3600.0
 
 
-def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
+def _redeal(project_id: str, nights: dict[str, str] | None = None,
+            moon: dict[str, Any] | None = None) -> int:
     """Give every rig on a project its panels for tonight, and say who changed.
 
     Called whenever a rig joins or asks what to shoot. It is what replaces a
@@ -799,6 +812,13 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
             dealt_for = float(task.get("dealtHours") or 0.0)
             if dealt_for and abs(hours - dealt_for) > 0.15 * max(hours, dealt_for):
                 current = False
+        # A list dealt the old way - every filter on every panel, which on a
+        # five-filter project is a night on one panel - is dealt again now
+        # rather than held. Once, when the rig first asks after the change.
+        if (current and asked is not None and (task.get("kind") or "mosaic") == "mosaic"
+                and len(task.get("filters") or []) > 1
+                and len(((task.get("visit") or {}).get("frames") or {})) > 1):
+            current = False
         if current:
             tonight.extend(collab.Region.read(cells[i]) for i in held
                            if 0 <= i < len(cells))
@@ -817,7 +837,8 @@ def _redeal(project_id: str, nights: dict[str, str] | None = None) -> int:
             # A mosaic night is one filter per telescope, and which one is
             # the collaboration's call: the filter thinnest across the field
             # once what the other rigs are putting in tonight is counted.
-            chosen = collab.choose_filter(filters, goals, depth, cells, spoken, hours)
+            chosen = collab.choose_filter(filters, goals, depth, cells, spoken, hours,
+                                          moon if asked is not None else None)
             if chosen is not None:
                 filters = [chosen]
                 night_goals = {name: value for name, value in goals.items()
@@ -1064,6 +1085,8 @@ def override_verdict(row_id: str, accepted: bool = Query(...),
 @app.get("/api/v1/health")
 def health() -> dict[str, Any]:
     return {"ok": True, "protocol": collab.PROTOCOL, "time": time.time(),
+            # Which build is running, so an update can be checked from outside.
+            "version": astrocontrol.__version__,
             "adminConfigured": bool(ADMIN_TOKEN),
             "discord": DISCORD.configured(),
             "roleRequired": bool(DISCORD.role)}

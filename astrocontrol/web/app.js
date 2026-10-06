@@ -4061,38 +4061,48 @@ async function loadDetail() {
 
 /* -------------------------------------------- stepping through the frames */
 
-/** Where the frame on view sits in the session: 0 is the newest. */
+/** The frames worth stepping through: saved lights, newest first.
+ *
+ *  Autofocus and centring frames pass through the viewer as they are taken
+ *  but are never saved, and a night has a hundred of them among the subs
+ *  that matter. Stepping back through the night means the subs. */
+function steppableImages() {
+  return (state.images || []).filter((image) => image.frame_type === 'light' && image.saved);
+}
+
+/** Where the frame on view sits among the subs: 0 is the newest, -1 if it is
+ *  not a sub (a focus or centring frame, or nothing yet). */
 function frameIndex() {
-  const images = state.images || [];
-  return images.findIndex((image) => image.id === state.currentId);
+  return steppableImages().findIndex((image) => image.id === state.currentId);
 }
 
 /** "3 / 41" on the toolbar, and whether the viewer is following the camera. */
 function updateFramePosition() {
-  const images = state.images || [];
+  const subs = steppableImages();
   const index = frameIndex();
   const label = $('viewerPos');
   if (!label) return;
-  if (!images.length || index < 0) {
-    label.textContent = '';
+  if (!subs.length || index < 0) {
+    label.textContent = subs.length ? `${subs.length} sub${subs.length === 1 ? '' : 's'}` : '';
     state.browsing = false;
   } else {
-    label.textContent = `${images.length - index} / ${images.length}`;
+    label.textContent = `${subs.length - index} / ${subs.length}`;
     state.browsing = index > 0;
   }
-  $('btnPrevFrame').disabled = index < 0 || index >= images.length - 1;
+  $('btnPrevFrame').disabled = !subs.length || index >= subs.length - 1;
   $('btnNextFrame').disabled = index <= 0;
   $('btnNewestFrame').hidden = !state.browsing;
 }
 
-/** Step back (delta +1) or forward (delta -1) through the session's frames. */
+/** Step back (delta +1) or forward (delta -1) through the night's subs. From
+ *  a focus or centring frame, back goes to the newest sub. */
 function stepFrame(delta) {
-  const images = state.images || [];
-  if (!images.length) return;
+  const subs = steppableImages();
+  if (!subs.length) return;
   const index = frameIndex();
-  const next = index < 0 ? 0 : Math.max(0, Math.min(images.length - 1, index + delta));
+  const next = index < 0 ? 0 : Math.max(0, Math.min(subs.length - 1, index + delta));
   if (next === index) return;
-  selectImage(images[next].id, true);
+  selectImage(subs[next].id, true);
 }
 
 function newestFrame() {

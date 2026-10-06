@@ -10,8 +10,18 @@ Install
 2. Double-click  Starfront.exe.
    Windows may say it protected your PC the first time: More info -> Run anyway.
 3. The window opens on its own. Your settings, targets and plans live in
-   C:\Users\<you>\Starfront, so replacing this folder with a newer one never
-   loses them.
+   C:\Users\<you>\Starfront (C:\Users\<you>\AstroControl on a PC that ran an
+   earlier build), so replacing this folder with a newer one never loses them.
+
+Windows 10
+----------
+The window is Microsoft Edge WebView2. Windows 11 has it; a Windows 10 PC
+that has not had Edge updated may not. If Starfront says it could not open
+its window, install the WebView2 Runtime (Evergreen, x64) from
+   https://developer.microsoft.com/microsoft-edge/webview2/
+and start Starfront again. Until then it offers to open in your browser.
+It also needs the .NET Framework 4.7.2 or later, which Windows Update has
+put on every Windows 10 PC for years.
 
 Coming from N.I.N.A.?
 ---------------------
@@ -35,7 +45,8 @@ You will also want
 
 If something goes wrong
 -----------------------
-The log is  C:\Users\<you>\Starfront\logs\astrocontrol.log.
+The log is  C:\Users\<you>\Starfront\logs\astrocontrol.log  (or under
+AstroControl on a PC that ran an earlier build).
 "Starfront Console.exe" runs the same program with a console, so a window that
 will not open says why:   "Starfront Console.exe" --browser   opens it in your
 browser instead.

@@ -209,14 +209,19 @@ def run(host: str = "127.0.0.1", port: int = 0, debug: bool = False) -> None:
     log.info("server listening on %s", server.url)
 
     bridge = Bridge()
-    window = webview.create_window(
-        WINDOW_TITLE, server.url,
-        js_api=bridge,
-        width=1680, height=1000, min_size=(1180, 720),
-        background_color=BACKGROUND,
-        text_select=False,
-        confirm_close=False,
-    )
+    try:
+        window = webview.create_window(
+            WINDOW_TITLE, server.url,
+            js_api=bridge,
+            width=1680, height=1000, min_size=(1180, 720),
+            background_color=BACKGROUND,
+            text_select=False,
+            confirm_close=False,
+        )
+    except Exception:                              # noqa: BLE001 - reported, then the browser
+        log.exception("the window could not be created")
+        _browser_instead(server, log)
+        return
     bridge._window = window
     log.info("window created")
 
@@ -237,16 +242,86 @@ def run(host: str = "127.0.0.1", port: int = 0, debug: bool = False) -> None:
     extra = {"icon": str(icon)} if icon.is_file() else {}
     try:
         log.info("handing over to the webview event loop")
-        webview.start(menu=menu, debug=debug, **extra)
+        # Edge WebView2 by name, rather than whatever pywebview finds: without
+        # the WebView2 runtime it would fall back to the old Internet Explorer
+        # engine, which opens a window and then shows a page that cannot run
+        # this interface. A plain failure here is caught below and explained.
+        try:
+            webview.start(menu=menu, debug=debug, gui="edgechromium", **extra)
+        except TypeError:
+            # Older pywebview builds take no `menu` or `icon` argument at all.
+            # Better a window with no menu bar than no window.
+            log.exception("this pywebview does not accept a menu; opening without one")
+            webview.start(debug=debug, gui="edgechromium")
         log.info("the window was closed")
-    except TypeError:
-        # Older pywebview builds take no `menu` or `icon` argument at all.
-        # Better a window with no menu bar than no window.
-        log.exception("this pywebview does not accept a menu; opening without one")
-        webview.start(debug=debug)
+    except Exception:                              # noqa: BLE001 - reported, then the browser
+        # The usual cause on Windows 10 is no Edge WebView2 runtime: it
+        # comes with Windows 11 and with recent Edge updates, and is missing
+        # on a PC that has had neither. The program is still fine; only the
+        # window is not. Say so, and offer the browser.
+        log.exception("the window could not be opened")
+        _browser_instead(server, log)
     finally:
         server.stop()
         log.info("server stopped")
+
+
+WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
+
+
+def _browser_instead(server: ServerThread, log: logging.Logger) -> None:
+    """The window failed: say why in a box, and offer the interface in a browser.
+
+    Under `pythonw` there is no console to print to, so a window that fails
+    silently is a program that appears to do nothing. A message box is the
+    one thing that can still be shown. If the person says yes, the browser
+    opens on the running server and a second box keeps the server alive
+    until they dismiss it.
+    """
+    message = ("Starfront could not open its window.\n\n"
+               "On Windows 10 this usually means Microsoft Edge WebView2 is not "
+               "installed. It is a free, small download from Microsoft:\n"
+               f"{WEBVIEW2_URL}\n\n"
+               "Open Starfront in your web browser instead for now?\n\n"
+               f"The details are in the log: {_log_path()}")
+    if not _ask(message):
+        return
+    import webbrowser
+    webbrowser.open(server.url)
+    log.info("opened %s in the browser instead of the window", server.url)
+    _ask(f"Starfront is running in your browser at {server.url}\n\n"
+         "Leave this box open while you use it. Press OK or Cancel to stop "
+         "Starfront.", ok_only=True)
+
+
+def _ask(message: str, ok_only: bool = False) -> bool:
+    """A native message box, or a console prompt where there is a console."""
+    try:
+        import ctypes
+        MB_YESNO, MB_OK, MB_ICONWARNING, MB_ICONINFORMATION = 0x4, 0x0, 0x30, 0x40
+        style = (MB_OK | MB_ICONINFORMATION) if ok_only else (MB_YESNO | MB_ICONWARNING)
+        answer = ctypes.windll.user32.MessageBoxW(None, message, WINDOW_TITLE, style)
+        return ok_only or answer == 6                      # IDYES
+    except Exception:                              # noqa: BLE001 - no user32: not Windows
+        print(message)
+        if ok_only:
+            try:
+                input("Press Enter to stop Starfront.")
+            except EOFError:
+                pass
+            return True
+        try:
+            return input("Open in the browser? [y/N] ").strip().lower().startswith("y")
+        except EOFError:
+            return False
+
+
+def _log_path() -> str:
+    try:
+        from .logs import log_dir
+        return str(log_dir() / "astrocontrol.log")
+    except Exception:                              # noqa: BLE001 - only for the message
+        return "the logs folder under your Starfront data folder"
 
 
 def _webview_version() -> str:

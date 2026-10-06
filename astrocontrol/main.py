@@ -2491,6 +2491,13 @@ def _presence_hint() -> dict[str, Any]:
     the name of the target being shot - never the observatory's location.
     """
     said: dict[str, Any] = {}
+    # What this telescope is called, for the chart. The equipment profile's
+    # name when one is loaded - "fsq106", "RASA 8" - because the rig's own
+    # name is "Telescope 1" on nearly every install, and three dots all
+    # labelled Telescope 1 tell nobody anything.
+    with contextlib.suppress(Exception):
+        profile_name = str((equipment.active() or {}).get("name") or "").strip()
+        said["telescope"] = (profile_name or rigs.master.name)[:60]
     mount = rigs.master.manager.get("mount")
     if mount is not None and mount.connected:
         with contextlib.suppress(Exception):

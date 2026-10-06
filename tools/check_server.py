@@ -1347,6 +1347,14 @@ status, who = call("GET", "/api/v1/presence", token=AGENT_TOKEN)
 me = next((t for t in who.get("telescopes", []) if t["id"] == AGENT_ID), None)
 case("a check-in that says nothing keeps what was said before",
      me is not None and me["target"] == "M42", str(me))
+# The chart shows the name the rig gives itself - its equipment profile -
+# over the "Telescope 1" it was enrolled under.
+call("POST", "/api/v1/agent/hello", {"protocol": collab.PROTOCOL, "profile": PROFILE,
+                                     "presence": {"telescope": "fsq106"}}, token=AGENT_TOKEN)
+status, who = call("GET", "/api/v1/presence", token=AGENT_TOKEN)
+me = next((t for t in who.get("telescopes", []) if t["id"] == AGENT_ID), None)
+case("a telescope on the chart carries the name its rig gives itself",
+     me is not None and me["name"] == "fsq106" and me["enrolledAs"] == "Telescope 1", str(me))
 
 # ------------------------------------------- the coordinator's night rules
 status, ruled = call("POST", "/api/v1/projects", {

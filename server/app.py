@@ -325,9 +325,14 @@ def _presence_of(agent: dict[str, Any], now: float) -> dict[str, Any]:
     ra = _number_or_none(said.get("ra"))
     dec = _number_or_none(said.get("dec"))
     person = store.user(str(agent.get("owner_id") or "")) if agent.get("owner_id") else None
+    # The name the rig gives itself on each check-in - its equipment
+    # profile's - over the name it was enrolled under, which is "Telescope 1"
+    # on nearly every install.
+    called = str(said.get("telescope") or "").strip()[:60]
     return {
         "id": agent["id"],
-        "name": agent.get("name") or "",
+        "name": called or agent.get("name") or "",
+        "enrolledAs": agent.get("name") or "",
         "owner": agent.get("owner") or "",
         # Who the telescope belongs to, as Discord shows them: their current
         # name and their picture, for the chart.
@@ -358,7 +363,10 @@ def _participants(project_id: str, now: float) -> dict[str, Any]:
         agent = store.agent(agent_id)
         if agent is None:
             continue
-        names.append(agent.get("name") or agent_id)
+        # The name the rig gives itself on check-in, over the one it was
+        # enrolled under; see `_presence_of`.
+        called = str((agent.get("presence") or {}).get("telescope") or "").strip()
+        names.append(called or agent.get("name") or agent_id)
         if now - float(agent.get("seen") or 0.0) <= ONLINE_SECONDS:
             online += 1
     return {"participants": len(names), "participantsOnline": online,
